@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  Layers3, Database, Cpu, Zap, GitBranch, Shield, BarChart3,
-  Home, ChevronDown, X, Copy, Check, ExternalLink, Settings,
-  Play, Pause, RotateCcw
+  Database, Cpu, Zap, GitBranch, Shield, BarChart3,
+  X, Copy, Check, Play, Pause, RotateCcw
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import icon from "../icon.png";
+
+type ViewMode = "3d" | "2d" | "detailed";
+type LayerId = "edge" | "app" | "data";
+type Vec3 = [number, number, number];
 
 interface Component {
   id: string;
@@ -18,8 +21,31 @@ interface Component {
   description: string;
   position: [number, number, number];
   size: [number, number, number];
+  layer: LayerId;
   dependencies: string[];
   details: string;
+}
+
+interface Projected {
+  x: number;
+  y: number;
+  depth: number;
+  scale: number;
+}
+
+interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface Hit {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 const components: Component[] = [
@@ -29,8 +55,9 @@ const components: Component[] = [
     icon: GitBranch,
     color: "#22d3ee",
     description: "Next.js 15 SPA for agent management and monitoring",
-    position: [-3, 2, 0],
-    size: [1.8, 1.2, 0.4],
+    position: [-3, 2, 4.5],
+    size: [1.8, 1.2, 0.8],
+    layer: "edge",
     dependencies: ["api"],
     details: "React-based UI with real-time updates, authentication, and comprehensive monitoring dashboard",
   },
@@ -41,7 +68,8 @@ const components: Component[] = [
     color: "#8b5cf6",
     description: "Express.js backend with full agent lifecycle management",
     position: [0, 1, 0],
-    size: [1.8, 1.2, 0.4],
+    size: [1.8, 1.2, 0.8],
+    layer: "app",
     dependencies: ["postgres", "redis"],
     details: "RESTful API with authentication, rate limiting, audit logging, and metrics collection",
   },
@@ -52,7 +80,8 @@ const components: Component[] = [
     color: "#f59e0b",
     description: "BullMQ-based job queue workers for async execution",
     position: [3, 2, 0],
-    size: [1.8, 1.2, 0.4],
+    size: [1.8, 1.2, 0.8],
+    layer: "app",
     dependencies: ["redis", "postgres"],
     details: "Distributed job processing with retry logic, timeouts, and failure handling",
   },
@@ -62,8 +91,9 @@ const components: Component[] = [
     icon: Database,
     color: "#34d399",
     description: "Primary data persistence layer",
-    position: [-3, -1, 0],
-    size: [1.6, 1.2, 0.4],
+    position: [-3, -1, -4.5],
+    size: [1.6, 1.2, 0.8],
+    layer: "data",
     dependencies: [],
     details: "Agent registry, runs, approvals, users, organizations, and audit logs",
   },
@@ -73,8 +103,9 @@ const components: Component[] = [
     icon: Zap,
     color: "#ef4444",
     description: "Job queue and caching layer",
-    position: [0, -1, 0],
-    size: [1.6, 1.2, 0.4],
+    position: [0, -1, -4.5],
+    size: [1.6, 1.2, 0.8],
+    layer: "data",
     dependencies: [],
     details: "BullMQ jobs, sessions, real-time event streaming, and performance caching",
   },
@@ -84,11 +115,18 @@ const components: Component[] = [
     icon: Cpu,
     color: "#a78bfa",
     description: "Local LLM inference engine",
-    position: [3, -1, 0],
-    size: [1.6, 1.2, 0.4],
+    position: [3, -1, -4.5],
+    size: [1.6, 1.2, 0.8],
+    layer: "data",
     dependencies: [],
     details: "Local LLM provider with support for multiple models (qwen, llama, etc)",
   },
+];
+
+const layers: { id: LayerId; name: string; color: string }[] = [
+  { id: "edge", name: "Edge / Ingress", color: "#22d3ee" },
+  { id: "app", name: "Application", color: "#8b5cf6" },
+  { id: "data", name: "Data / Storage", color: "#34d399" },
 ];
 
 const dataFlows = [
@@ -100,153 +138,733 @@ const dataFlows = [
   { from: "worker", to: "ollama", label: "Inference", color: "#a78bfa" },
 ];
 
+const CAMERA_DISTANCE = 22;
+const TILT_MIN = 0.1;
+const TILT_MAX = 0.5;
+const DEFAULT_TILT = 0.32;
+
+const sceneCenter: Vec3 = [
+  components.reduce((sum, c) => sum + c.position[0], 0) / components.length,
+  components.reduce((sum, c) => sum + c.position[1], 0) / components.length,
+  components.reduce((sum, c) => sum + c.position[2], 0) / components.length,
+];
+
+const lightDir: Vec3 = (() => {
+  const raw: Vec3 = [-0.35, 0.85, 0.55];
+  const len = Math.hypot(raw[0], raw[1], raw[2]);
+  return [raw[0] / len, raw[1] / len, raw[2] / len];
+})();
+
+const FACES: { idx: number[]; n: Vec3 }[] = [
+  { idx: [4, 5, 7, 6], n: [0, 0, 1] },
+  { idx: [0, 1, 3, 2], n: [0, 0, -1] },
+  { idx: [2, 3, 7, 6], n: [0, 1, 0] },
+  { idx: [0, 4, 5, 1], n: [0, -1, 0] },
+  { idx: [1, 5, 7, 3], n: [1, 0, 0] },
+  { idx: [0, 4, 6, 2], n: [-1, 0, 0] },
+];
+
+function resolveApiServerHref(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL;
+  if (!raw) return "/docs";
+  try {
+    return new URL(raw).origin + "/health";
+  } catch {
+    return "/docs";
+  }
+}
+
+const apiServerHref = resolveApiServerHref();
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+function rotate3(x: number, y: number, z: number, yaw: number, pitch: number): Vec3 {
+  const cosY = Math.cos(yaw);
+  const sinY = Math.sin(yaw);
+  const x1 = x * cosY + z * sinY;
+  const z1 = -x * sinY + z * cosY;
+  const cosP = Math.cos(pitch);
+  const sinP = Math.sin(pitch);
+  const y2 = y * cosP - z1 * sinP;
+  const z2 = y * sinP + z1 * cosP;
+  return [x1, y2, z2];
+}
+
+function makeProjector(
+  yaw: number,
+  pitch: number,
+  centerX: number,
+  centerY: number,
+  scale: number,
+  distance: number
+) {
+  return (x: number, y: number, z: number): Projected => {
+    const [tx, ty, tz] = rotate3(
+      x - sceneCenter[0],
+      y - sceneCenter[1],
+      z - sceneCenter[2],
+      yaw,
+      pitch
+    );
+    const depth = distance - tz;
+    const factor = distance / Math.max(depth, 1);
+    return {
+      x: centerX + tx * factor * scale,
+      y: centerY - ty * factor * scale,
+      depth,
+      scale: factor,
+    };
+  };
+}
+
+function shadedAlpha(hex: string, factor: number, alpha: number): string {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = clamp(Math.round(((num >> 16) & 255) * factor), 0, 255);
+  const g = clamp(Math.round(((num >> 8) & 255) * factor), 0, 255);
+  const b = clamp(Math.round((num & 255) * factor), 0, 255);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function withAlpha(hex: string, alpha: number): string {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function clipToRect(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  rect: Rect
+): [number, number] {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  if (Math.abs(dx) < 1e-6 && Math.abs(dy) < 1e-6) return [fromX, fromY];
+  let exit = 1;
+  if (dx > 1e-6) exit = Math.min(exit, (rect.x + rect.w - fromX) / dx);
+  else if (dx < -1e-6) exit = Math.min(exit, (rect.x - fromX) / dx);
+  if (dy > 1e-6) exit = Math.min(exit, (rect.y + rect.h - fromY) / dy);
+  else if (dy < -1e-6) exit = Math.min(exit, (rect.y - fromY) / dy);
+  const t = clamp(exit, 0, 1) * 0.98;
+  return [fromX + dx * t, fromY + dy * t];
+}
+
+function drawFittedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  baseSize: number,
+  color: string
+) {
+  let size = baseSize;
+  ctx.font = `bold ${size}px inter, sans-serif`;
+  let width = ctx.measureText(text).width;
+  while (width > maxWidth && size > 7) {
+    size -= 1;
+    ctx.font = `bold ${size}px inter, sans-serif`;
+    width = ctx.measureText(text).width;
+  }
+  ctx.fillStyle = color;
+  if (width <= maxWidth) {
+    ctx.fillText(text, x, y);
+    return;
+  }
+  let cut = text;
+  while (cut.length > 1 && ctx.measureText(cut + "...").width > maxWidth) {
+    cut = cut.slice(0, -1);
+  }
+  ctx.fillText(cut + "...", x, y);
+}
+
+function drawBox3d(
+  ctx: CanvasRenderingContext2D,
+  comp: Component,
+  corners: Projected[],
+  yaw: number,
+  pitch: number,
+  distance: number,
+  active: boolean
+) {
+  const visible: { depth: number; path: Projected[]; brightness: number }[] = [];
+  for (const face of FACES) {
+    const n = face.n;
+    const [nx, ny, nz] = rotate3(n[0], n[1], n[2], yaw, pitch);
+    const cx = comp.position[0] + (n[0] * comp.size[0]) / 2 - sceneCenter[0];
+    const cy = comp.position[1] + (n[1] * comp.size[1]) / 2 - sceneCenter[1];
+    const cz = comp.position[2] + (n[2] * comp.size[2]) / 2 - sceneCenter[2];
+    const [fx, fy, fz] = rotate3(cx, cy, cz, yaw, pitch);
+    const facing = nx * (0 - fx) + ny * (0 - fy) + nz * (distance - fz);
+    if (facing <= 0) continue;
+    const dot = Math.max(0, n[0] * lightDir[0] + n[1] * lightDir[1] + n[2] * lightDir[2]);
+    const brightness = 0.32 + 0.68 * dot;
+    const path = face.idx.map((i) => corners[i]);
+    const depth = path.reduce((sum, p) => sum + p.depth, 0) / path.length;
+    visible.push({ depth, path, brightness });
+  }
+  visible.sort((a, b) => b.depth - a.depth);
+  for (const face of visible) {
+    ctx.beginPath();
+    ctx.moveTo(face.path[0].x, face.path[0].y);
+    for (let i = 1; i < face.path.length; i++) {
+      ctx.lineTo(face.path[i].x, face.path[i].y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = shadedAlpha(
+      comp.color,
+      face.brightness,
+      0.86 + 0.12 * face.brightness
+    );
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(comp.color, active ? 1 : 0.75);
+    ctx.lineWidth = active ? 2.2 : 1.3;
+    ctx.stroke();
+  }
+}
+
 export default function ArchitecturePage() {
   const [selectedComponent, setSelectedComponent] = useState<string | null>("api");
   const [isRotating, setIsRotating] = useState(true);
   const [rotationSpeed, setRotationSpeed] = useState(0.5);
-  const [viewMode, setViewMode] = useState<"3d" | "2d" | "detailed">("3d");
+  const [viewMode, setViewMode] = useState<ViewMode>("3d");
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rotationRef = useRef(0);
+  const tiltRef = useRef(DEFAULT_TILT);
   const animationRef = useRef<number | null>(null);
-  const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const hitsRef = useRef<Hit[]>([]);
+  const hoverRef = useRef<string | null>(null);
+  const draggingRef = useRef(false);
+  const stateRef = useRef({ isRotating, rotationSpeed, viewMode, selectedComponent });
+
+  useEffect(() => {
+    stateRef.current = { isRotating, rotationSpeed, viewMode, selectedComponent };
+  }, [isRotating, rotationSpeed, viewMode, selectedComponent]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const animate = () => {
-      if (isRotating) {
-        rotationRef.current += rotationSpeed * 0.01;
+    let width = 1;
+    let height = 1;
+    let dpr = 1;
+    let lastTime = performance.now();
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const nextWidth = Math.max(1, Math.round(rect.width));
+      const nextHeight = Math.max(1, Math.round(rect.height));
+      const nextDpr = Math.max(1, window.devicePixelRatio || 1);
+      if (nextWidth === width && nextHeight === height && nextDpr === dpr) return;
+      width = nextWidth;
+      height = nextHeight;
+      dpr = nextDpr;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+    };
+
+    const observer = new ResizeObserver(resize);
+    observer.observe(canvas);
+    resize();
+
+    const pickAt = (x: number, y: number): string | null => {
+      const list = hitsRef.current;
+      for (let i = list.length - 1; i >= 0; i--) {
+        const hit = list[i];
+        if (x >= hit.x && x <= hit.x + hit.w && y >= hit.y && y <= hit.y + hit.h) {
+          return hit.id;
+        }
       }
+      return null;
+    };
 
-      ctx.fillStyle = "rgba(8, 10, 15, 0.9)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const localPoint = (e: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    };
 
+    const pointer = {
+      id: -1,
+      down: false,
+      lastX: 0,
+      lastY: 0,
+      moved: 0,
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      const point = localPoint(e);
+      pointer.id = e.pointerId;
+      pointer.down = true;
+      pointer.lastX = point.x;
+      pointer.lastY = point.y;
+      pointer.moved = 0;
+      draggingRef.current = false;
+      if (e.pointerType === "mouse") e.preventDefault();
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+      }
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      const point = localPoint(e);
+      if (pointer.down && e.pointerId === pointer.id) {
+        const dx = point.x - pointer.lastX;
+        const dy = point.y - pointer.lastY;
+        pointer.lastX = point.x;
+        pointer.lastY = point.y;
+        pointer.moved += Math.abs(dx) + Math.abs(dy);
+        if (pointer.moved > 4) {
+          draggingRef.current = true;
+          rotationRef.current += dx * 0.006;
+          tiltRef.current = clamp(tiltRef.current + dy * 0.004, TILT_MIN, TILT_MAX);
+          hoverRef.current = null;
+          canvas.style.cursor = "grabbing";
+        }
+        return;
+      }
+      const hit = pickAt(point.x, point.y);
+      hoverRef.current = hit;
+      canvas.style.cursor = hit ? "pointer" : "grab";
+    };
+
+    const finishPointer = (e: PointerEvent) => {
+      if (!pointer.down || e.pointerId !== pointer.id) return;
+      const wasDrag = draggingRef.current;
+      pointer.down = false;
+      draggingRef.current = false;
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch {
+      }
+      if (!wasDrag) {
+        const point = localPoint(e);
+        const hit = pickAt(point.x, point.y);
+        if (hit) setSelectedComponent(hit);
+      }
+      const hover = hoverRef.current;
+      canvas.style.cursor = hover ? "pointer" : "grab";
+    };
+
+    const onPointerUp = (e: PointerEvent) => finishPointer(e);
+
+    const onPointerCancel = (e: PointerEvent) => {
+      if (!pointer.down || e.pointerId !== pointer.id) return;
+      pointer.down = false;
+      draggingRef.current = false;
+      canvas.style.cursor = "grab";
+    };
+
+    const onPointerLeave = () => {
+      if (pointer.down) return;
+      hoverRef.current = null;
+      canvas.style.cursor = "grab";
+    };
+
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointermove", onPointerMove);
+    canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointercancel", onPointerCancel);
+    canvas.addEventListener("pointerleave", onPointerLeave);
+
+    const drawGrid = () => {
       ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
       ctx.lineWidth = 1;
-      for (let i = 0; i < canvas.width; i += 40) {
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i, canvas.height);
-        ctx.stroke();
+      ctx.beginPath();
+      for (let x = 0; x <= width; x += 40) {
+        ctx.moveTo(x + 0.5, 0);
+        ctx.lineTo(x + 0.5, height);
       }
-      for (let i = 0; i < canvas.height; i += 40) {
-        ctx.beginPath();
-        ctx.moveTo(0, i);
-        ctx.lineTo(canvas.width, i);
-        ctx.stroke();
+      for (let y = 0; y <= height; y += 40) {
+        ctx.moveTo(0, y + 0.5);
+        ctx.lineTo(width, y + 0.5);
+      }
+      ctx.stroke();
+    };
+
+    const drawRings = (rect: Rect, color: string) => {
+      for (let i = 1; i <= 3; i++) {
+        ctx.strokeStyle = withAlpha(color, 0.32 / i);
+        ctx.lineWidth = 1;
+        ctx.strokeRect(
+          rect.x - i * 4 + 0.5,
+          rect.y - i * 4 + 0.5,
+          rect.w + i * 8,
+          rect.h + i * 8
+        );
+      }
+    };
+
+    const drawLegend = () => {
+      const rows = layers.map((layer) => ({
+        ...layer,
+        count: components.filter((c) => c.layer === layer.id).length,
+      }));
+      const pad = 10;
+      const titleHeight = 18;
+      const rowHeight = 16;
+      const boxWidth = 168;
+      const boxHeight = pad * 2 + titleHeight + rows.length * rowHeight;
+      const x = 14;
+      const y = height - boxHeight - 14;
+      ctx.fillStyle = "rgba(10, 13, 18, 0.9)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.09)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.rect(x + 0.5, y + 0.5, boxWidth, boxHeight);
+      ctx.fill();
+      ctx.stroke();
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.font = "9px inter, sans-serif";
+      ctx.fillStyle = "#8f98a9";
+      ctx.fillText("LAYERS", x + pad, y + pad + 6);
+      rows.forEach((row, index) => {
+        const rowY = y + pad + titleHeight + index * rowHeight + rowHeight / 2;
+        ctx.fillStyle = row.color;
+        ctx.fillRect(x + pad, rowY - 4, 8, 8);
+        ctx.font = "10px inter, sans-serif";
+        ctx.fillStyle = "#c7cfdb";
+        ctx.fillText(row.name, x + pad + 16, rowY);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#8f98a9";
+        ctx.fillText(`${row.count} ${row.count === 1 ? "node" : "nodes"}`, x + boxWidth - pad, rowY);
+        ctx.textAlign = "left";
+      });
+    };
+
+    const renderSpatial = (st: {
+      selectedComponent: string | null;
+      viewMode: ViewMode;
+    }) => {
+      const yaw = rotationRef.current;
+      const pitch = tiltRef.current;
+      const scale = Math.max(14, Math.min((width - 40) / 17, (height - 40) / 10));
+      const project = makeProjector(
+        yaw,
+        pitch,
+        width / 2,
+        height / 2,
+        scale,
+        CAMERA_DISTANCE
+      );
+
+      const nodes = components.map((comp) => {
+        const hx = comp.size[0] / 2;
+        const hy = comp.size[1] / 2;
+        const hz = comp.size[2] / 2;
+        const corners: Projected[] = [];
+        for (let i = 0; i < 8; i++) {
+          corners.push(
+            project(
+              comp.position[0] + ((i & 1) !== 0 ? hx : -hx),
+              comp.position[1] + ((i & 2) !== 0 ? hy : -hy),
+              comp.position[2] + ((i & 4) !== 0 ? hz : -hz)
+            )
+          );
+        }
+        let minX = Infinity;
+        let minY = Infinity;
+        let maxX = -Infinity;
+        let maxY = -Infinity;
+        for (const corner of corners) {
+          minX = Math.min(minX, corner.x);
+          maxX = Math.max(maxX, corner.x);
+          minY = Math.min(minY, corner.y);
+          maxY = Math.max(maxY, corner.y);
+        }
+        const center = project(comp.position[0], comp.position[1], comp.position[2]);
+        return {
+          comp,
+          corners,
+          center,
+          rect: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
+          depth: center.depth,
+        };
+      });
+
+      let nearDepth = Infinity;
+      let farDepth = -Infinity;
+      for (const node of nodes) {
+        nearDepth = Math.min(nearDepth, node.depth);
+        farDepth = Math.max(farDepth, node.depth);
+      }
+      const depthSpan = Math.max(1e-6, farDepth - nearDepth);
+
+      const edges: {
+        flow: (typeof dataFlows)[number];
+        ax: number;
+        ay: number;
+        bx: number;
+        by: number;
+        depth: number;
+      }[] = [];
+      for (const flow of dataFlows) {
+        const from = nodes.find((n) => n.comp.id === flow.from);
+        const to = nodes.find((n) => n.comp.id === flow.to);
+        if (!from || !to) continue;
+        const [ax, ay] = clipToRect(
+          from.center.x,
+          from.center.y,
+          to.center.x,
+          to.center.y,
+          from.rect
+        );
+        const [bx, by] = clipToRect(
+          to.center.x,
+          to.center.y,
+          from.center.x,
+          from.center.y,
+          to.rect
+        );
+        edges.push({
+          flow,
+          ax,
+          ay,
+          bx,
+          by,
+          depth: (from.depth + to.depth) / 2,
+        });
       }
 
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
-      const scale = 60;
+      const tasks: { depth: number; run: () => void }[] = [];
 
-      dataFlows.forEach((flow) => {
-        const fromComp = components.find((c) => c.id === flow.from);
-        const toComp = components.find((c) => c.id === flow.to);
-        if (!fromComp || !toComp) return;
+      for (const edge of edges) {
+        const depthRatio = (edge.depth - nearDepth) / depthSpan;
+        const hot =
+          st.selectedComponent === edge.flow.from ||
+          st.selectedComponent === edge.flow.to;
+        const alpha = clamp((0.62 - 0.45 * depthRatio) * (hot ? 1.6 : 1), 0.06, 0.95);
+        const lineWidth = 1 + (1 - depthRatio) * 1.4 + (hot ? 0.6 : 0);
+        tasks.push({
+          depth: edge.depth,
+          run: () => {
+            ctx.strokeStyle = withAlpha(edge.flow.color, alpha);
+            ctx.lineWidth = lineWidth;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(edge.ax, edge.ay);
+            ctx.lineTo(edge.bx, edge.by);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          },
+        });
+      }
 
-        const fromX =
-          centerX +
-          (fromComp.position[0] * Math.cos(rotationRef.current) -
-            fromComp.position[1] * Math.sin(rotationRef.current)) *
-            scale;
-        const fromY =
-          centerY +
-          (fromComp.position[0] * Math.sin(rotationRef.current) +
-            fromComp.position[1] * Math.cos(rotationRef.current)) *
-            scale;
+      for (const node of nodes) {
+        const active =
+          st.selectedComponent === node.comp.id || hoverRef.current === node.comp.id;
+        tasks.push({
+          depth: node.depth,
+          run: () => {
+            drawBox3d(ctx, node.comp, node.corners, yaw, pitch, CAMERA_DISTANCE, active);
+            if (active) drawRings(node.rect, node.comp.color);
+            hitsRef.current.push({
+              id: node.comp.id,
+              x: node.rect.x,
+              y: node.rect.y,
+              w: node.rect.w,
+              h: node.rect.h,
+            });
+          },
+        });
+      }
 
-        const toX =
-          centerX +
-          (toComp.position[0] * Math.cos(rotationRef.current) -
-            toComp.position[1] * Math.sin(rotationRef.current)) *
-            scale;
-        const toY =
-          centerY +
-          (toComp.position[0] * Math.sin(rotationRef.current) +
-            toComp.position[1] * Math.cos(rotationRef.current)) *
-            scale;
+      tasks.sort((a, b) => b.depth - a.depth);
+      for (const task of tasks) task.run();
 
-        ctx.strokeStyle = flow.color + "40";
-        ctx.lineWidth = 2;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      for (const node of nodes) {
+        const active =
+          st.selectedComponent === node.comp.id || hoverRef.current === node.comp.id;
+        if (st.viewMode !== "3d" || active) {
+          drawFittedText(
+            ctx,
+            node.comp.name,
+            node.center.x,
+            node.center.y,
+            node.rect.w - 14,
+            11,
+            active ? "#ffffff" : "rgba(255, 255, 255, 0.92)"
+          );
+        }
+      }
+
+      if (st.viewMode === "detailed") {
+        for (const edge of edges) {
+          const midX = (edge.ax + edge.bx) / 2;
+          const midY = (edge.ay + edge.by) / 2;
+          ctx.font = "10px inter, sans-serif";
+          const labelWidth = ctx.measureText(edge.flow.label).width;
+          ctx.fillStyle = "rgba(8, 10, 15, 0.88)";
+          ctx.fillRect(midX - labelWidth / 2 - 5, midY - 8, labelWidth + 10, 16);
+          ctx.fillStyle = withAlpha(edge.flow.color, 0.95);
+          ctx.fillText(edge.flow.label, midX, midY);
+        }
+      }
+    };
+
+    const renderFlat = (st: {
+      selectedComponent: string | null;
+      viewMode: ViewMode;
+    }) => {
+      const scale = Math.max(14, Math.min((width - 40) / 8, (height - 150) / 4.2));
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const nodes = components.map((comp) => {
+        const x = centerX + (comp.position[0] - sceneCenter[0]) * scale;
+        const y = centerY - (comp.position[1] - sceneCenter[1]) * scale;
+        const w = comp.size[0] * scale;
+        const h = comp.size[1] * scale;
+        return {
+          comp,
+          center: { x, y },
+          rect: { x: x - w / 2, y: y - h / 2, w, h },
+        };
+      });
+      const byId = new Map(nodes.map((node) => [node.comp.id, node]));
+
+      const edges: {
+        flow: (typeof dataFlows)[number];
+        ax: number;
+        ay: number;
+        bx: number;
+        by: number;
+      }[] = [];
+      for (const flow of dataFlows) {
+        const from = byId.get(flow.from);
+        const to = byId.get(flow.to);
+        if (!from || !to) continue;
+        const [ax, ay] = clipToRect(
+          from.center.x,
+          from.center.y,
+          to.center.x,
+          to.center.y,
+          from.rect
+        );
+        const [bx, by] = clipToRect(
+          to.center.x,
+          to.center.y,
+          from.center.x,
+          from.center.y,
+          to.rect
+        );
+        edges.push({ flow, ax, ay, bx, by });
+      }
+
+      for (const edge of edges) {
+        const hot =
+          st.selectedComponent === edge.flow.from ||
+          st.selectedComponent === edge.flow.to;
+        ctx.strokeStyle = withAlpha(edge.flow.color, hot ? 0.85 : 0.45);
+        ctx.lineWidth = hot ? 2.4 : 1.6;
         ctx.setLineDash([5, 5]);
         ctx.beginPath();
-        ctx.moveTo(fromX, fromY);
-        ctx.lineTo(toX, toY);
+        ctx.moveTo(edge.ax, edge.ay);
+        ctx.lineTo(edge.bx, edge.by);
         ctx.stroke();
         ctx.setLineDash([]);
+      }
 
-        const midX = (fromX + toX) / 2;
-        const midY = (fromY + toY) / 2;
-        ctx.fillStyle = flow.color;
-        ctx.font = "10px inter";
-        ctx.textAlign = "center";
-        ctx.fillText(flow.label, midX, midY - 5);
-      });
-
-      components.forEach((comp) => {
-        const x =
-          centerX +
-          (comp.position[0] * Math.cos(rotationRef.current) -
-            comp.position[1] * Math.sin(rotationRef.current)) *
-            scale;
-        const y =
-          centerY +
-          (comp.position[0] * Math.sin(rotationRef.current) +
-            comp.position[1] * Math.cos(rotationRef.current)) *
-            scale;
-
-        const isSelected = selectedComponent === comp.id;
-        const size = isSelected ? 50 : 40;
-
-        ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+      for (const node of nodes) {
+        const active =
+          st.selectedComponent === node.comp.id || hoverRef.current === node.comp.id;
+        ctx.fillStyle = withAlpha(node.comp.color, active ? 0.75 : 0.5);
+        ctx.strokeStyle = withAlpha(node.comp.color, active ? 1 : 0.85);
+        ctx.lineWidth = active ? 2.5 : 1.5;
         ctx.beginPath();
-        ctx.ellipse(x + 2, y + 2, size, size * 0.6, 0, 0, Math.PI * 2);
+        ctx.rect(node.rect.x, node.rect.y, node.rect.w, node.rect.h);
         ctx.fill();
+        ctx.stroke();
+        if (active) drawRings(node.rect, node.comp.color);
+        hitsRef.current.push({
+          id: node.comp.id,
+          x: node.rect.x,
+          y: node.rect.y,
+          w: node.rect.w,
+          h: node.rect.h,
+        });
+      }
 
-        ctx.fillStyle = comp.color + (isSelected ? "cc" : "88");
-        ctx.strokeStyle = comp.color;
-        ctx.lineWidth = isSelected ? 2.5 : 1.5;
-        ctx.fillRect(x - size, y - size * 0.6, size * 2, size * 1.2);
-        ctx.strokeRect(x - size, y - size * 0.6, size * 2, size * 1.2);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      for (const node of nodes) {
+        const active =
+          st.selectedComponent === node.comp.id || hoverRef.current === node.comp.id;
+        drawFittedText(
+          ctx,
+          node.comp.name,
+          node.center.x,
+          node.center.y,
+          node.rect.w - 14,
+          12,
+          active ? "#ffffff" : "rgba(255, 255, 255, 0.95)"
+        );
+      }
 
-        if (isSelected) {
-          ctx.strokeStyle = comp.color + "44";
-          ctx.lineWidth = 1;
-          for (let i = 1; i <= 3; i++) {
-            ctx.globalAlpha = 0.3 / i;
-            ctx.strokeRect(
-              x - size - i * 3,
-              y - size * 0.6 - i * 3,
-              size * 2 + i * 6,
-              size * 1.2 + i * 6
-            );
-          }
-          ctx.globalAlpha = 1;
+      if (st.viewMode === "detailed") {
+        for (const edge of edges) {
+          const midX = (edge.ax + edge.bx) / 2;
+          const midY = (edge.ay + edge.by) / 2;
+          ctx.font = "11px inter, sans-serif";
+          const labelWidth = ctx.measureText(edge.flow.label).width;
+          ctx.fillStyle = "rgba(8, 10, 15, 0.88)";
+          ctx.fillRect(midX - labelWidth / 2 - 5, midY - 8, labelWidth + 10, 16);
+          ctx.fillStyle = withAlpha(edge.flow.color, 0.95);
+          ctx.fillText(edge.flow.label, midX, midY);
         }
-
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 11px inter";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(comp.name, x, y);
-      });
-
-      animationRef.current = requestAnimationFrame(animate);
-    };
-
-    animate();
-
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isRotating, rotationSpeed, selectedComponent]);
+
+    const render = (time: number) => {
+      animationRef.current = requestAnimationFrame(render);
+      const st = stateRef.current;
+      const dt = Math.min(0.05, Math.max(0, (time - lastTime) / 1000));
+      lastTime = time;
+      if (st.isRotating && !draggingRef.current) {
+        rotationRef.current += st.rotationSpeed * 0.6 * dt;
+      }
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = "#0a0d12";
+      ctx.fillRect(0, 0, width, height);
+      drawGrid();
+
+      hitsRef.current = [];
+      if (st.viewMode === "2d") {
+        renderFlat(st);
+      } else {
+        renderSpatial(st);
+      }
+      if (st.viewMode === "detailed") drawLegend();
+    };
+
+    animationRef.current = requestAnimationFrame(render);
+
+    return () => {
+      observer.disconnect();
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerCancel);
+      canvas.removeEventListener("pointerleave", onPointerLeave);
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+      hoverRef.current = null;
+      draggingRef.current = false;
+      hitsRef.current = [];
+    };
+  }, []);
 
   const currentComponent = components.find((c) => c.id === selectedComponent);
 
@@ -255,6 +873,13 @@ export default function ArchitecturePage() {
     setCopiedLink(text);
     setTimeout(() => setCopiedLink(null), 2000);
   };
+
+  const canvasLabel =
+    viewMode === "2d"
+      ? "Interactive 2D Architecture"
+      : viewMode === "detailed"
+      ? "Detailed 3D Architecture"
+      : "Interactive 3D Architecture";
 
   return (
     <div className="architecture-page">
@@ -271,7 +896,7 @@ export default function ArchitecturePage() {
             <Link href="/docs">
               <span>Documentation</span>
             </Link>
-            <a href="http://localhost:3001" target="_blank" rel="noopener noreferrer">
+            <a href={apiServerHref} target="_blank" rel="noopener noreferrer">
               <span>API Server</span>
             </a>
           </div>
@@ -281,7 +906,21 @@ export default function ArchitecturePage() {
       <div className="architecture-container">
         <aside className="arch-sidebar">
           <div className="arch-controls">
-            <h3>3D View Controls</h3>
+            <h3>View Controls</h3>
+            <div className="control-group">
+              <label>View Mode</label>
+              <div className="view-modes">
+                {(["3d", "2d", "detailed"] as ViewMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    className={`view-mode-btn ${viewMode === mode ? "active" : ""}`}
+                    onClick={() => setViewMode(mode)}
+                  >
+                    {mode === "3d" ? "3D" : mode === "2d" ? "2D" : "Detailed"}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="control-group">
               <label>Rotation Speed</label>
               <input
@@ -305,7 +944,10 @@ export default function ArchitecturePage() {
               </button>
               <button
                 className="control-btn"
-                onClick={() => (rotationRef.current = 0)}
+                onClick={() => {
+                  rotationRef.current = 0;
+                  tiltRef.current = DEFAULT_TILT;
+                }}
               >
                 <RotateCcw size={16} />
                 Reset
@@ -340,14 +982,9 @@ export default function ArchitecturePage() {
 
         <main className="arch-main">
           <div className="visualization-area">
-            <canvas
-              ref={canvasRef}
-              className="architecture-canvas"
-              width={1200}
-              height={600}
-            />
+            <canvas ref={canvasRef} className="architecture-canvas" />
             <div className="canvas-overlay">
-              <div className="canvas-label">Interactive 3D Architecture</div>
+              <div className="canvas-label">{canvasLabel}</div>
               <div className="canvas-hint">Click components to view details</div>
             </div>
           </div>
@@ -643,6 +1280,41 @@ export default function ArchitecturePage() {
           color: var(--muted);
         }
 
+        .view-modes {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 4px;
+          padding: 3px;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.02);
+        }
+
+        .view-mode-btn {
+          border: 1px solid transparent;
+          background: transparent;
+          color: var(--muted);
+          padding: 7px 4px;
+          border-radius: 7px;
+          cursor: pointer;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          transition: all 0.2s;
+        }
+
+        .view-mode-btn:hover {
+          background: rgba(255, 255, 255, 0.05);
+          color: var(--text);
+        }
+
+        .view-mode-btn.active {
+          background: rgba(139, 92, 246, 0.15);
+          border-color: var(--accent);
+          color: var(--accent);
+        }
+
         .slider {
           width: 100%;
           cursor: pointer;
@@ -751,6 +1423,8 @@ export default function ArchitecturePage() {
           display: block;
           width: 100%;
           height: 600px;
+          cursor: grab;
+          touch-action: pan-y;
         }
 
         .canvas-overlay {
