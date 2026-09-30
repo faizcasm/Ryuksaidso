@@ -70,8 +70,9 @@ jobs:
       - name: Pull, restart and health gate
         if: steps.target.outputs.skip == 'false'
         run: |
-          ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" "bash -s -- '$DEPLOY_TAG'" <<'REMOTE'
+          ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" 'cat > /tmp/ryuksaidso-deploy.sh && chmod 700 /tmp/ryuksaidso-deploy.sh' <<'REMOTE'
           set -euo pipefail
+          exec 0</dev/null
           DEPLOY_TAG="$1"
           cd /opt/ryuksaidso
           export IMAGE_TAG="$DEPLOY_TAG"
@@ -128,3 +129,4 @@ jobs:
           fi
           exit 1
           REMOTE
+          ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" "bash /tmp/ryuksaidso-deploy.sh '$DEPLOY_TAG'; rc=\$?; rm -f /tmp/ryuksaidso-deploy.sh; exit \$rc"
