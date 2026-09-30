@@ -234,6 +234,24 @@ describe('web_search (three-engine fallback)', () => {
     } finally { vi.unstubAllGlobals(); }
   });
 
+  it('retries with a stopword-stripped query after a decoy feed', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes('duckduckgo')) return html(anomaly, 202);
+      if (u.includes('format=rss') && u.includes('node.js')) {
+        return html('<rss version="2.0"><channel><item><title>Quote of the Day - BrainyQuote</title><link>https://www.brainyquote.com/quotes/</link><description>Daily inspirational quotes.</description></item></channel></rss>');
+      }
+      if (u.includes('format=rss')) return html(bingRss);
+      return html('');
+    }));
+    try {
+      const out = await run({ query: 'node.js lts' }) as any;
+      expect(out.engine).toBe('bing');
+      expect(out.results[0].url).toBe('https://nodejs.org/en/download');
+      expect(out.results[0].title).toBe('Download Node.js');
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it('reports a soft error naming every engine when all of them fail', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network down'))));
     try {

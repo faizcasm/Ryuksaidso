@@ -241,44 +241,52 @@ const searchTokens = (text: string): Set<string> =>
   );
 
 async function bing(query: string, limit: number): Promise<SearchHit[]> {
-  const response = await fetch(
-    `https://www.bing.com/search?q=${encodeURIComponent(query)}&format=rss`,
-    {
-      headers: {
-        'user-agent': USER_AGENT,
-        accept: 'application/rss+xml, application/xml, text/xml, */*',
-      },
-      signal: AbortSignal.timeout(9000),
-    },
-  );
-  if (!response.ok) throw new Error(`Bing HTTP ${response.status}`);
-  const xml = await response.text();
-  const hits: SearchHit[] = [];
-  for (const chunk of xml.split('<item>').slice(1)) {
-    if (hits.length >= 10) break;
-    const title = /<title>([\s\S]*?)<\/title>/.exec(chunk);
-    const link = /<link>([\s\S]*?)<\/link>/.exec(chunk);
-    if (!title || !link) continue;
-    const url = decodeBingUrl(link[1]);
-    if (!url) continue;
-    const description = /<description>([\s\S]*?)<\/description>/.exec(chunk);
-    hits.push({
-      title: TAGS(decodeEntities(title[1])),
-      url,
-      snippet: TAGS(decodeEntities(description?.[1] ?? '')),
-    });
+  const needles = [...searchTokens(query)];
+  const stripped = needles.join(' ');
+  const candidates = stripped && stripped !== query.toLowerCase().trim() ? [query, stripped] : [query];
+  let lastError = '';
+  for (const candidate of candidates) {
+    const hits: SearchHit[] = [];
+    try {
+      const response = await fetch(
+        `https://www.bing.com/search?q=${encodeURIComponent(candidate)}&format=rss`,
+        {
+          headers: {
+            'user-agent': USER_AGENT,
+            accept: 'application/rss+xml, application/xml, text/xml, */*',
+          },
+          signal: AbortSignal.timeout(9000),
+        },
+      );
+      if (!response.ok) throw new Error(`Bing HTTP ${response.status}`);
+      const xml = await response.text();
+      for (const chunk of xml.split('<item>').slice(1)) {
+        if (hits.length >= 10) break;
+        const title = /<title>([\s\S]*?)<\/title>/.exec(chunk);
+        const link = /<link>([\s\S]*?)<\/link>/.exec(chunk);
+        if (!title || !link) continue;
+        const url = decodeBingUrl(link[1]);
+        if (!url) continue;
+        const description = /<description>([\s\S]*?)<\/description>/.exec(chunk);
+        hits.push({
+          title: TAGS(decodeEntities(title[1])),
+          url,
+          snippet: TAGS(decodeEntities(description?.[1] ?? '')),
+        });
+      }
+      if (!hits.length) throw new Error('Bing returned no parseable results');
+      if (!needles.length) return hits.slice(0, limit);
+      const relevant = hits.filter((hit) => {
+        const haystack = searchTokens(`${hit.title} ${hit.snippet} ${hit.url}`);
+        return needles.some((token) => haystack.has(token));
+      });
+      if (relevant.length) return relevant.slice(0, limit);
+      lastError = 'Bing returned results unrelated to the query';
+    } catch (error) {
+      lastError = (error as Error).message;
+    }
   }
-  if (!hits.length) throw new Error('Bing returned no parseable results');
-  const needles = searchTokens(query);
-  if (needles.size) {
-    const relevant = hits.filter((hit) => {
-      const haystack = searchTokens(`${hit.title} ${hit.snippet} ${hit.url}`);
-      return [...needles].some((token) => haystack.has(token));
-    });
-    if (!relevant.length) throw new Error('Bing returned results unrelated to the query');
-    return relevant.slice(0, limit);
-  }
-  return hits.slice(0, limit);
+  throw new Error(lastError || 'Bing search failed');
 }
 
 export const webSearchTool = {
