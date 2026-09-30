@@ -156,3 +156,67 @@ describe('current_weather (two-source resilience)', () => {
     } finally { vi.unstubAllGlobals(); }
   });
 });
+
+describe('web_search (three-engine fallback)', () => {
+  const tools = buildTools({ prisma: {} });
+  const run = (input: Record<string, unknown>) => tools.web_search.execute(input, { user: { organizationId: 'o' } as any, runId: 'r' });
+
+  const html = (body: string, status = 200) => Promise.resolve(new Response(body, { status }));
+  const json = (data: unknown) => Promise.resolve(new Response(JSON.stringify(data)));
+  const anomaly = '<html><head><title>DuckDuckGo</title></head><body>Our systems have detected an anomaly challenge.</body></html>';
+  const bingPage = [
+    '<ol id="b_results">',
+    '<li class="b_algo" data-id iid=SERP.1><div><h2><a href="https://www.bing.com/ck/a?!&amp;&amp;p=abc&amp;u=a1aHR0cHM6Ly9ub2RlanMub3JnL2VuL2Rvd25sb2Fk&amp;ntb=1">Download <strong>Node.js</strong></a></h2></div><div class="b_caption"><p>Learn more about Node.js releases.</p></div></li>',
+    '<li class="b_algo" data-id iid=SERP.2><div><h2><a href="https://nodejs.org/en/about/releases/">Releases</a></h2></div><div class="b_caption"><p>LTS schedule.</p></div></li>',
+    '</ol>',
+  ].join('');
+
+  it('falls back to Bing when DuckDuckGo serves an anomaly page', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes('duckduckgo')) return html(anomaly, 202);
+      if (u.includes('bing.com/search')) return html(bingPage);
+      return html('');
+    }));
+    try {
+      const out = await run({ query: 'node.js lts' }) as any;
+      expect(out.engine).toBe('bing');
+      expect(out.note).toContain('duckduckgo');
+      expect(out.results).toHaveLength(2);
+      expect(out.results[0]).toMatchObject({
+        title: 'Download Node.js',
+        url: 'https://nodejs.org/en/download',
+        snippet: 'Learn more about Node.js releases.',
+      });
+      expect(out.results[1].url).toBe('https://nodejs.org/en/about/releases/');
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('reaches Wikipedia as the last engine and reports what was unavailable', async () => {
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes('duckduckgo')) return html(anomaly, 202);
+      if (u.includes('bing.com/search')) return html('<html><body>no results here</body></html>');
+      if (u.includes('wikipedia.org')) return json({ query: { search: [{ title: 'Node.js', snippet: 'A cross-platform runtime' }] } });
+      return html('');
+    }));
+    try {
+      const out = await run({ query: 'node.js' }) as any;
+      expect(out.engine).toBe('wikipedia');
+      expect(out.note).toContain('duckduckgo');
+      expect(out.note).toContain('bing');
+      expect(out.results[0].url).toBe('https://en.wikipedia.org/wiki/Node.js');
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('reports a soft error naming every engine when all of them fail', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network down'))));
+    try {
+      const out = await run({ query: 'anything' }) as any;
+      expect(out).toHaveProperty('error');
+      expect(out.error).toContain('duckduckgo');
+      expect(out.error).toContain('bing');
+      expect(out.error).toContain('wikipedia');
+    } finally { vi.unstubAllGlobals(); }
+  });
+});

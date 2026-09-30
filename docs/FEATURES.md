@@ -23,7 +23,7 @@
 - Knowledge (RAG): `search_knowledge` with OR-ed conversational retrieval and per-agent document scoping
 - Tickets: `get_ticket`, `add_ticket_message` (approval-gated)
 - Utilities: `current_time` (IANA timezones), `calculator` (safe expression evaluator, no eval), `current_weather` (Open-Meteo primary → Nominatim geocoding + met.no forecast fallbacks, no API key), `unit_convert` (temperature/length/mass/data/volume/speed/time, offline), `text_tools` (stats, base64 encode/decode, slugify, offline)
-- Web: `web_search` (DuckDuckGo with Wikipedia fallback), `github` (search repos / repo details / issues; optional `GITHUB_TOKEN`), `currency_convert` (ECB reference rates via Frankfurter, no key), `dictionary` (Dictionary API with Wiktionary fallback, no key), `news` (Hacker News front page / topic search, no key)
+- Web: `web_search` (DuckDuckGo → Bing → Wikipedia fallback chain), `github` (search repos / repo details / issues; optional `GITHUB_TOKEN`), `currency_convert` (ECB reference rates via Frankfurter, no key), `dictionary` (Dictionary API with Wiktionary fallback, no key), `news` (Hacker News front page / topic search, no key)
 - MCP integrations: any MCP server configured through `MCP_SERVERS` (stdio command or HTTP URL) appears as `mcp__<server>__<tool>`; write-like tool names require human approval
 - Tool errors return `{error}` payloads instead of failing the whole run
 

@@ -207,10 +207,43 @@ async function wikipedia(query: string, limit: number): Promise<SearchHit[]> {
   return hits;
 }
 
+const decodeBingUrl = (href: string): string => {
+  const target = href.replace(/&amp;/g, '&');
+  const encoded = /[?&]u=a1([^&"]+)/.exec(target);
+  const value = encoded
+    ? Buffer.from(encoded[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+    : target;
+  return /^https?:\/\//i.test(value) ? value : '';
+};
+
+async function bing(query: string, limit: number): Promise<SearchHit[]> {
+  const response = await fetch(
+    `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${Math.max(limit, 5)}&setlang=en`,
+    {
+      headers: { 'user-agent': USER_AGENT, 'accept-language': 'en-US,en;q=0.9' },
+      signal: AbortSignal.timeout(9000),
+    },
+  );
+  if (!response.ok) throw new Error(`Bing HTTP ${response.status}`);
+  const html = await response.text();
+  const hits: SearchHit[] = [];
+  for (const chunk of html.split(/<li[^>]*class="[^"]*\bb_algo\b[^"]*"/i).slice(1)) {
+    if (hits.length >= limit) break;
+    const link = /<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i.exec(chunk);
+    if (!link) continue;
+    const url = decodeBingUrl(link[1]);
+    if (!url) continue;
+    const caption = /class="[^"]*b_caption[^"]*"[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i.exec(chunk);
+    hits.push({ title: TAGS(link[2]), url, snippet: caption ? TAGS(caption[1]) : '' });
+  }
+  if (!hits.length) throw new Error('Bing returned no parseable results');
+  return hits;
+}
+
 export const webSearchTool = {
   name: 'web_search',
   description:
-    'Search the public web for a query and return ranked results with titles, URLs and snippets. Input: { query: string, maxResults?: number (1-8) }. Falls back to Wikipedia if the primary search engine is unavailable.',
+    'Search the public web for a query and return ranked results with titles, URLs and snippets. Input: { query: string, maxResults?: number (1-8) }. Tries DuckDuckGo, then Bing, then Wikipedia.',
   category: 'Web',
   scope: 'web:read',
   requiresApproval: false,
@@ -219,15 +252,26 @@ export const webSearchTool = {
       const query = String(input.query ?? input.prompt ?? '').trim();
       if (!query) throw new Error('A non-empty query is required');
       const maxResults = Math.min(Math.max(Number(input.maxResults ?? 5) || 5, 1), 8);
-      try {
-        return { engine: 'duckduckgo', query, results: await duckDuckGo(query, maxResults) };
-      } catch (primaryError) {
+      const engines: Array<[string, (q: string, n: number) => Promise<SearchHit[]>]> = [
+        ['duckduckgo', duckDuckGo],
+        ['bing', bing],
+        ['wikipedia', wikipedia],
+      ];
+      const unavailable: string[] = [];
+      for (const [engine, search] of engines) {
         try {
-          return { engine: 'wikipedia', query, results: await wikipedia(query, maxResults), note: `DuckDuckGo unavailable (${(primaryError as Error).message})` };
-        } catch (fallbackError) {
-          return { error: `Web search failed: ${(primaryError as Error).message}; fallback failed: ${(fallbackError as Error).message}` };
+          const results = await search(query, maxResults);
+          return {
+            engine,
+            query,
+            results,
+            ...(unavailable.length ? { note: `unavailable: ${unavailable.join(' | ')}` } : {}),
+          };
+        } catch (error) {
+          unavailable.push(`${engine}: ${(error as Error).message}`);
         }
       }
+      return { error: `Web search failed: ${unavailable.join('; ')}` };
     }),
 };
 

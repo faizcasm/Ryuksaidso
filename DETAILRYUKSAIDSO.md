@@ -464,7 +464,7 @@ One shared registry (`packages/agent-tools`) — **the API serves metadata, the 
 | 6 | `current_weather` | Utilities | `weather:read` | Never | Open-Meteo primary → **Nominatim geocode + met.no forecast fallbacks**; 15 s budget |
 | 7 | `unit_convert` | Utilities | `unit:use` | Never | Offline: temperature/length/mass/data/volume/speed/time; word aliases; rejects cross-family |
 | 8 | `text_tools` | Utilities | `text:use` | Never | Offline: stats, base64 encode/decode (unicode-safe), slugify |
-| 9 | `web_search` | Web | `web:read` | Never | DuckDuckGo → Wikipedia fallback |
+| 9 | `web_search` | Web | `web:read` | Never | DuckDuckGo → Bing → Wikipedia fallback |
 | 10 | `github` | Web | `github:read` | Never | search_repos / get_repo / list_issues / search_issues; optional `GITHUB_TOKEN` |
 | 11 | `currency_convert` | Web | `currency:read` | Never | ECB reference rates via Frankfurter (keyless) |
 | 12 | `dictionary` | Web | `dictionary:read` | Never | Dictionary API → **Wiktionary REST fallback** |
