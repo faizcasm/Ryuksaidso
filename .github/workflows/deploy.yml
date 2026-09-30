@@ -53,13 +53,24 @@ jobs:
           cd /opt/ryuksaidso
           export IMAGE_TAG="$DEPLOY_TAG"
           PREV_TAG="$(cat .last-good-tag 2>/dev/null || true)"
-          echo "Deploying image tag: $IMAGE_TAG (previous good: ${PREV_TAG:-none})"
-          docker compose -f docker-compose.prod.yml pull migrate api worker web
-          docker compose -f docker-compose.prod.yml up -d --remove-orphans
-          docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || true
+          COMPOSE_FILES=(-f docker-compose.prod.yml)
+          SCHEME="http"
+          CURL_OPTS=""
+          NGINX_ID="$(docker compose -f docker-compose.prod.yml ps -q nginx 2>/dev/null | head -n1 || true)"
+          if [ -n "$NGINX_ID" ] && docker inspect --format '{{range .Mounts}}{{println .Destination}}{{end}}' "$NGINX_ID" 2>/dev/null | grep -q '^/etc/nginx/templates/tls.conf.template$'; then
+            COMPOSE_FILES+=(-f docker-compose.tls.yml)
+            export COMPOSE_PROFILES="${COMPOSE_PROFILES:-tls}"
+            SCHEME="https"
+            CURL_OPTS="-k"
+          fi
+          dc() { docker compose "${COMPOSE_FILES[@]}" "$@"; }
+          echo "Deploying image tag: $IMAGE_TAG (previous good: ${PREV_TAG:-none}) (scheme: $SCHEME)"
+          dc pull migrate api worker web
+          dc up -d --remove-orphans
+          dc exec -T nginx nginx -s reload || true
           ok=0
           for i in $(seq 1 36); do
-            if curl -fsS http://127.0.0.1/healthz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/health >/dev/null 2>&1; then
+            if curl $CURL_OPTS -fsS "$SCHEME://127.0.0.1/healthz" >/dev/null 2>&1 && curl $CURL_OPTS -fsS "$SCHEME://127.0.0.1/health" >/dev/null 2>&1; then
               ok=1
               break
             fi
@@ -68,15 +79,15 @@ jobs:
           if [ "$ok" = "1" ]; then
             echo "$IMAGE_TAG" > .last-good-tag
             echo "Deploy healthy"
-            docker compose -f docker-compose.prod.yml ps
+            dc ps
             exit 0
           fi
           echo "Health gate failed, collecting logs"
-          docker compose -f docker-compose.prod.yml logs --tail=200 || true
+          dc logs --tail=200 || true
           if [ -n "${PREV_TAG:-}" ]; then
             echo "Rolling back to $PREV_TAG"
             export IMAGE_TAG="$PREV_TAG"
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            dc up -d --remove-orphans
           fi
           exit 1
           REMOTE

@@ -56,11 +56,11 @@ appRouter.post('/tickets/:id/run', async (req, res) => {
     prisma.organization.findUnique({ where: { id: u.organizationId }, select: { llmProvider: true, ollamaModel: true, omnirouteModel: true } })
   ]);
   if (!agent) return res.status(409).json({ error: 'Conflict', message: 'Resolution agent is not configured' });
-  const provider = 'OMNIROUTE' as const;
-  const model = organization?.omnirouteModel || process.env.OMNIROUTE_MODEL
-    || organization?.ollamaModel || process.env.OLLAMA_MODEL || '';
+  const provider = organization?.llmProvider === 'OMNIROUTE' ? 'OMNIROUTE' as const : 'OLLAMA' as const;
+  const envModel = provider === 'OMNIROUTE' ? process.env.OMNIROUTE_MODEL : process.env.OLLAMA_MODEL;
+  const model = (provider === 'OMNIROUTE' ? organization?.omnirouteModel : organization?.ollamaModel) || envModel || '';
   if (!model) {
-    return res.status(409).json({ error: 'ProviderNotConfigured', message: 'No model configured for OmniRoute or Ollama. Configure a model in Settings before running an agent.' });
+    return res.status(409).json({ error: 'ProviderNotConfigured', message: `${provider} has no model configured for this workspace. Configure it in Settings before running an agent.` });
   }
   const run = await prisma.agentRun.create({ data: { organizationId: u.organizationId, projectId: agent.projectId, ticketId: ticket.id, agentId: agent.id, agentVersionId: agent.versions[0]?.id, provider, status: 'QUEUED', trigger: 'ticket', environment: 'production', input: { prompt: `${ticket.title}
 
