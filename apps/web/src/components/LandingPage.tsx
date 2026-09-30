@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import icon from "./icon.png";
+import icon from "../app/icon.png";
 import {
   ArrowRight,
   BarChart3,
@@ -15,13 +15,16 @@ import {
   FileSearch,
   GitBranch,
   Layers3,
+  Menu,
   Play,
   ShieldCheck,
   Sparkles,
   TestTube2,
   Workflow,
+  X,
   Zap,
 } from "lucide-react";
+import { FOUNDER_URL } from "@/lib/site";
 
 function HeroCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -395,7 +398,7 @@ const FLOW_STEPS = [
   },
 ];
 
-const RUN_SNIPPET = `curl -X POST http://localhost:4001/api/control/runs \\
+const RUN_SNIPPET = `curl -X POST https://ryuksaidso.faizcasm.me/api/control/runs \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer rsk_live_..." \\
   -d '{
@@ -498,6 +501,7 @@ function CopySnippet({ label, code }: { label: string; code: string }) {
 export default function LandingPage() {
   const [tourTab, setTourTab] = useState<TourTabId>("traces");
   const [decision, setDecision] = useState<"approved" | "rejected" | null>(null);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     const nodes = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
@@ -554,6 +558,33 @@ export default function LandingPage() {
             <ArrowRight size={15} />
           </Link>
         </div>
+
+        <button
+          type="button"
+          className="nav-toggle"
+          aria-label={navOpen ? "Close menu" : "Open menu"}
+          aria-expanded={navOpen}
+          onClick={() => setNavOpen(open => !open)}
+        >
+          {navOpen ? <X size={18} /> : <Menu size={18} />}
+        </button>
+
+        {navOpen && (
+          <nav className="mobile-nav" aria-label="Mobile">
+            <Link href="/docs" onClick={() => setNavOpen(false)}>
+              Docs
+            </Link>
+            <Link href="/architecture" onClick={() => setNavOpen(false)}>
+              Architecture
+            </Link>
+            <Link href="/playground" onClick={() => setNavOpen(false)}>
+              Playground
+            </Link>
+            <Link href="/auth" onClick={() => setNavOpen(false)}>
+              Sign in
+            </Link>
+          </nav>
+        )}
       </header>
 
       {}
@@ -942,10 +973,10 @@ export default function LandingPage() {
       {}
       <footer className="site-footer">
         <div className="footer-brand">
-          <span className="brand-mark">
+          <span className="brand-mark footer-mark">
             <Image src={icon} alt="" width={22} height={22} />
           </span>
-          <div>
+          <div className="footer-copy">
             <b>RYUKSAIDSO</b>
             <span>Agent reliability &amp; control plane</span>
           </div>
@@ -956,14 +987,19 @@ export default function LandingPage() {
           <Link href="/playground">Playground</Link>
           <Link href="/auth">Sign in</Link>
         </nav>
-        <small>© {new Date().getFullYear()} RYUKSAIDSO — built for production agents.</small>
+        <small>
+          © {new Date().getFullYear()} RYUKSAIDSO · Founded by{" "}
+          <a href={FOUNDER_URL} target="_blank" rel="noopener noreferrer">
+            Faizan Hameed (Faizcasm)
+          </a>{" "}
+          · built for production agents.
+        </small>
       </footer>
 
       <style jsx>{`
         .landing {
           position: relative;
           min-height: 100vh;
-          overflow-x: hidden;
           background: radial-gradient(1200px 600px at 50% -10%, rgba(139, 92, 246, 0.14), transparent 60%),
             linear-gradient(180deg, #080a0f 0%, #0a0d14 45%, #080a0f 100%);
           color: var(--text);
@@ -1017,7 +1053,6 @@ export default function LandingPage() {
           mask-image: radial-gradient(circle at 50% 30%, black, transparent 78%);
         }
 
-        .site-header,
         .hero,
         .section,
         .site-footer {
@@ -1030,11 +1065,59 @@ export default function LandingPage() {
         }
 
         .site-header {
+          position: sticky;
+          top: 0;
+          z-index: 40;
+          width: 100%;
           display: flex;
           align-items: center;
+          flex-wrap: wrap;
           gap: 22px;
-          padding-top: 22px;
-          padding-bottom: 22px;
+          padding-top: 16px;
+          padding-bottom: 16px;
+          padding-left: max(24px, calc((100% - 1180px) / 2));
+          padding-right: max(24px, calc((100% - 1180px) / 2));
+          background: rgba(8, 10, 15, 0.72);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .nav-toggle {
+          display: none;
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          border: 1px solid var(--line);
+          background: rgba(255, 255, 255, 0.045);
+          color: var(--text);
+          place-items: center;
+        }
+
+        .mobile-nav {
+          flex-basis: 100%;
+          display: grid;
+          gap: 2px;
+          padding-top: 8px;
+        }
+
+        .mobile-nav a {
+          color: var(--muted);
+          font-size: 13px;
+          text-decoration: none;
+          padding: 11px 12px;
+          border-radius: 10px;
+        }
+
+        .mobile-nav a:hover {
+          color: var(--text);
+          background: rgba(255, 255, 255, 0.05);
+        }
+
+        @media (min-width: 981px) {
+          .mobile-nav {
+            display: none;
+          }
         }
         .brand {
           display: flex;
@@ -1049,8 +1132,17 @@ export default function LandingPage() {
           border-radius: 12px;
           display: grid;
           place-items: center;
-          background: linear-gradient(145deg, #8b5cf6, #3b82f6);
+          overflow: hidden;
+          background: #0b0d14;
+          border: 1px solid rgba(255, 255, 255, 0.1);
           box-shadow: 0 0 34px rgba(139, 92, 246, 0.35);
+        }
+
+        .brand-mark :global(img) {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
         }
         .brand-copy b {
           display: block;
@@ -1910,12 +2002,20 @@ export default function LandingPage() {
           align-items: center;
           gap: 10px;
         }
+
+        .footer-mark {
+          width: 30px;
+          height: 30px;
+          border-radius: 9px;
+        }
+
         .footer-brand b {
           display: block;
           font-size: 11px;
           letter-spacing: 0.18em;
         }
-        .footer-brand span {
+
+        .footer-copy span {
           display: block;
           font-size: 9px;
           color: var(--muted);
@@ -1938,6 +2038,15 @@ export default function LandingPage() {
           width: 100%;
           color: #666f7e;
           font-size: 10px;
+        }
+
+        .site-footer small :global(a) {
+          color: #a78bfa;
+          text-decoration: none;
+        }
+
+        .site-footer small :global(a):hover {
+          text-decoration: underline;
         }
 
         .landing :global([data-reveal]) {
@@ -1966,6 +2075,17 @@ export default function LandingPage() {
           }
           .site-nav {
             display: none;
+          }
+          .nav-toggle {
+            display: grid;
+          }
+          .header-actions {
+            margin-left: auto;
+          }
+          .site-header {
+            gap: 12px;
+            padding-top: 12px;
+            padding-bottom: 12px;
           }
         }
         @media (max-width: 640px) {
@@ -2015,6 +2135,25 @@ export default function LandingPage() {
           }
           .site-footer nav {
             margin-left: 0;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .brand-copy small {
+            display: none;
+          }
+          .brand-copy b {
+            font-size: 12px;
+          }
+          .site-header,
+          .hero,
+          .section,
+          .site-footer {
+            padding-left: 16px;
+            padding-right: 16px;
+          }
+          .btn {
+            padding: 9px 12px;
           }
         }
 

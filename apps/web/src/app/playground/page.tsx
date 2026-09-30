@@ -874,7 +874,7 @@ export default function PlaygroundPage() {
         <div>
           <Link href="/docs">Docs</Link>
           <Link href="/architecture">Architecture</Link>
-          <a href="http://faizcasm.me" target="_blank" rel="noopener noreferrer">
+          <a href="https://faizcasm.me" target="_blank" rel="noopener noreferrer">
             Faizan Hameed
           </a>
         </div>

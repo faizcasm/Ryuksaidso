@@ -343,7 +343,7 @@ OLLAMA_MODEL=qwen2.5-coder:3b-instruct-q4_K_M`}
         <H>4 · Create a workspace</H>
         <Steps
           items={[
-            { title: "Open the app", body: "Visit http://localhost:3000 and choose Get started." },
+            { title: "Open the app", body: "Visit https://ryuksaidso.faizcasm.me (or http://localhost:3000 when running locally) and choose Get started." },
             { title: "Register", body: "Email and password (or Google/GitHub once configured). The first user of a new workspace becomes its OWNER." },
             { title: "Look around", body: "Sample agents are provisioned for you, so Command Center and Run Lab are never empty." },
           ]}
@@ -375,7 +375,7 @@ OLLAMA_MODEL=qwen2.5-coder:3b-instruct-q4_K_M`}
 
         <H>Verify the install</H>
         <Code
-          code={`curl http://localhost:4001/health
+          code={`curl https://ryuksaidso.faizcasm.me/health
 # {"status":"ok","service":"ryuksaidso-api",...}
 
 curl http://localhost:4001/ready
@@ -829,7 +829,7 @@ Content-Type: application/json
         />
         <Code
           lang="bash"
-          code={`curl http://localhost:4001/api/control/dashboard \\
+          code={`curl https://ryuksaidso.faizcasm.me/api/control/dashboard \\
   -H "Authorization: Bearer rsk_live_..."`}
         />
         <Callout tone="note" title="CSRF only applies to cookies">
@@ -890,9 +890,9 @@ Content-Type: application/json
         <H>Health endpoints</H>
         <Code
           lang="bash"
-          code={`curl http://localhost:4001/health   # process liveness
-curl http://localhost:4001/ready    # Postgres + Redis + at least one LLM
-curl http://localhost:4001/metrics  # Prometheus text format`}
+          code={`curl https://ryuksaidso.faizcasm.me/health   # process liveness
+curl https://ryuksaidso.faizcasm.me/ready    # Postgres + Redis + at least one LLM
+curl http://127.0.0.1:4001/metrics           # Prometheus text format (instance-local)`}
         />
         <Bullets
           items={[
@@ -1029,7 +1029,7 @@ docker compose logs -f worker`}
         <H>Base URL &amp; auth</H>
         <Code
           lang="bash"
-          code={`Base URL   http://localhost:4001/api
+          code={`Base URL   https://ryuksaidso.faizcasm.me/api
 
 # browser: HTTP-only session cookie (plus x-csrf-token on writes)
 # machine: Authorization: Bearer rsk_live_...`}
@@ -1228,7 +1228,8 @@ docker compose logs -f worker`}
           <summary>The browser reports CORS errors</summary>
           <p>
             CORS_ORIGIN must list the exact web origin (default
-            http://localhost:3000) with no trailing slash. After changing it,
+            http://localhost:3000 locally, https://ryuksaidso.faizcasm.me in
+            production) with no trailing slash. After changing it,
             restart the API container — it is read at boot.
           </p>
         </details>
@@ -1487,7 +1488,7 @@ export default function DocsPage() {
               <Play size={14} /> Live playground
             </Link>
             <a
-              href="http://faizcasm.me"
+              href="https://faizcasm.me"
               target="_blank"
               rel="noopener noreferrer"
             >

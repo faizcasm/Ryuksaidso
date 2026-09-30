@@ -3510,7 +3510,7 @@ function DeveloperView({
             title="API contract"
             sub="Session cookies or workspace bearer keys."
           />
-          <pre className="code-doc">{`curl -X POST http://localhost:4001/api/control/runs \\
+          <pre className="code-doc">{`curl -X POST https://ryuksaidso.faizcasm.me/api/control/runs \\
   -H "Authorization: Bearer rsk_..." \\
   -H "Content-Type: application/json" \\
   -d '{\n    "agentId":"<agent-id>",\n    "provider":"${providerState?.current || "OLLAMA"}",\n    "prompt":"Investigate the incident"\n  }'`}</pre>

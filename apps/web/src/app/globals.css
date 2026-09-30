@@ -38,11 +38,9 @@ input,textarea,select{width:100%;border:1px solid var(--line);background:var(--p
 
 .verification-box{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;padding:11px;border:1px solid var(--line);border-radius:10px}.verification-box b,.verification-box span{display:block}.verification-box b{font-size:10px}.verification-box span{font-size:8px;color:var(--muted);margin-top:3px}.auth-home{display:inline-block;margin-bottom:14px;font-size:10px;color:var(--muted);text-decoration:none;letter-spacing:.06em}.auth-home:hover{color:var(--text)}.stack-label{display:grid;gap:6px;color:#9ca7b8;font-size:10px;margin-bottom:12px}.invite-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 2px;border-bottom:1px solid rgba(255,255,255,.055)}.invite-row b,.invite-row span{display:block}.invite-row b{font-size:10px}.invite-row span{font-size:8px;color:var(--muted);margin-top:3px}.auth-links{display:flex;justify-content:flex-end;margin-top:0}.auth-links button{cursor:pointer;text-align:right}.auth-form .auth-links{margin-top:-3px}.oauth-row a{display:flex;align-items:center;justify-content:center;text-decoration:none}.oauth-row .primary,.oauth-row .secondary{min-height:38px}
 
-/* invite panel: result box actions */
 .invite-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:2px}
 .invite-actions button{font-size:9px;padding:8px 12px}
 
-/* agent create form: tool picker */
 .tool-picker{display:grid;gap:8px;border:1px dashed var(--line);border-radius:10px;padding:11px}
 .tool-picker-title{color:#aab3c3;font-size:10px;letter-spacing:.08em;text-transform:uppercase}
 .tool-picker .checkbox{display:flex;gap:9px;align-items:flex-start;cursor:pointer}
@@ -56,7 +54,6 @@ input,textarea,select{width:100%;border:1px solid var(--line);background:var(--p
 .field-hint{display:block;font-size:10px;color:#7d8798;line-height:1.5;margin-top:4px}
 .prompt-badge{font-size:9px;color:#c4b5fd;background:rgba(139,92,246,.14);border:1px solid rgba(139,92,246,.35);border-radius:999px;padding:1px 7px;letter-spacing:.04em}
 
-/* evaluations: persisted run history */
 .eval-list{display:grid;gap:12px}
 .eval-row{border:1px solid var(--line);border-radius:10px;padding:12px;background:#0a0d12}
 .eval-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -67,7 +64,6 @@ input,textarea,select{width:100%;border:1px solid var(--line);background:var(--p
 .eval-cases .case.ok{border-left:2px solid #34d399}
 .eval-cases .case.bad{border-left:2px solid #fb7185}
 
-/* tickets: agent/human conversation thread */
 .ticket-thread{display:grid;gap:7px;margin-top:9px}
 .ticket-thread .msg{border:1px solid var(--line);border-radius:9px;padding:8px 10px;background:#0a0d12}
 .ticket-thread .msg.assistant{border-color:rgba(52,211,153,.2);background:rgba(52,211,153,.045)}
@@ -76,7 +72,6 @@ input,textarea,select{width:100%;border:1px solid var(--line);background:var(--p
 
 .tool-mcp-hint{font-size:9px;line-height:1.5;color:#6b7688;border-top:1px dashed var(--line);padding-top:8px;letter-spacing:.02em}
 
-/* ============ toast: modern card, auto-dismisses after 6s ============ */
 .toast{position:fixed;right:24px;top:80px;z-index:70;display:flex;align-items:center;gap:12px;min-width:320px;max-width:460px;padding:13px 14px;border-radius:14px;background:var(--panel);border:1px solid var(--line);box-shadow:0 30px 60px -18px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.04) inset;backdrop-filter:blur(18px);font-size:12.5px;line-height:1.45;color:var(--text);overflow:hidden;animation:toast-in .42s cubic-bezier(.16,1.15,.3,1)}
 .toast.error{border-color:rgba(251,113,133,.4)}
 .toast.success{border-color:rgba(52,211,153,.4)}
@@ -93,7 +88,6 @@ input,textarea,select{width:100%;border:1px solid var(--line);background:var(--p
 @keyframes toast-in{from{opacity:0;transform:translateX(30px) scale(.97)}to{opacity:1;transform:none}}
 @keyframes toast-timer{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 
-/* ============ charts, health, refresh affordances ============ */
 .area-chart{display:flex;flex-direction:column;gap:7px;min-height:120px}
 .area-plot{position:relative;flex:1;min-height:0}
 .area-plot svg{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -123,10 +117,6 @@ input,textarea,select{width:100%;border:1px solid var(--line);background:var(--p
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:700px){.health-grid{grid-template-columns:1fr}.toast{right:12px;left:12px;min-width:0}}
 
-/* ============ light theme: contrast + surface corrections ============
-   The base palette hardcodes several light-on-dark greys (nav text, code
-   blocks, badges). In light mode every one of them flips to a dark equivalent
-   and every white-alpha border/background flips to a slate-alpha one. */
 html[data-theme='light'] .sidebar nav button{color:#475569}
 html[data-theme='light'] .sidebar nav button:hover{background:rgba(15,23,42,.05);color:#0f172a}
 html[data-theme='light'] .sidebar nav button.active{background:linear-gradient(90deg,rgba(109,40,216,.10),rgba(8,145,178,.07));border-color:rgba(109,40,216,.22);color:#4c1d95}
@@ -227,3 +217,6 @@ html[data-theme='light'] .toast{box-shadow:0 24px 48px -16px rgba(15,23,42,.22),
 html[data-theme='light'] .toast.error{border-color:rgba(225,29,72,.35)}
 html[data-theme='light'] .toast.success{border-color:rgba(5,150,105,.35)}
 html[data-theme='light'] .panel{box-shadow:0 16px 40px -18px rgba(15,23,42,.14)}
+
+::selection{background:rgba(139,92,246,.35);color:#fff}
+:focus-visible{outline:2px solid rgba(139,92,246,.75);outline-offset:2px}
