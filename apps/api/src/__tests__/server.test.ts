@@ -19,6 +19,20 @@ describe('API', () => {
     expect(response.body.error).toBe('Unauthorized');
   });
 
+  it('serves the documented public routes without authentication', async () => {
+    for (const path of ['/api/', '/api/docs', '/api/docs/agents', '/api/docs/api/auth', '/api/architecture', '/api/architecture/visualize']) {
+      const response = await request(app).get(path);
+      expect(response.status, `${path} must stay public`).toBe(200);
+    }
+  });
+
+  it('keeps application routes behind authentication when docs are mounted first', async () => {
+    const runs = await request(app).get('/api/runs');
+    expect(runs.status).toBe(401);
+    const tickets = await request(app).get('/api/tickets');
+    expect(tickets.status).toBe(401);
+  });
+
   it('validates ticket payload before touching the database', async () => {
     const token = signToken({ id: 'u1', email: 'test@example.com', name: 'Test User', organizationId: 'org1', role: 'OWNER' });
     const response = await request(app)

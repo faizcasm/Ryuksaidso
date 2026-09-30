@@ -101,6 +101,7 @@ export function createApp() {
   });
 
   app.use('/api', csrfProtection);
+  app.use('/api', docsRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/control', controlRouter);
   app.use('/api', appRouter);
@@ -108,7 +109,6 @@ export function createApp() {
   app.use('/api', approvalRouter);
   app.use('/api', evaluationRouter);
   app.use('/api/admin', adminRouter);
-  app.use('/api', docsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
