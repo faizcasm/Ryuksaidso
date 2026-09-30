@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const optionalUrl = z.preprocess(v => (v === undefined || v === '' ? undefined : v), z.string().url().optional());
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development','test','production']).default('development'),
   APP_NAME: z.string().default('ryuksaidso'),
@@ -23,8 +25,8 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(600),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
   SYSTEM_ADMIN_EMAILS: z.string().default('').transform(v => v.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)),
-  GOOGLE_CLIENT_ID: z.string().optional(), GOOGLE_CLIENT_SECRET: z.string().optional(), GOOGLE_REDIRECT_URI: z.string().url().optional(),
-  GITHUB_CLIENT_ID: z.string().optional(), GITHUB_CLIENT_SECRET: z.string().optional(), GITHUB_REDIRECT_URI: z.string().url().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(), GOOGLE_CLIENT_SECRET: z.string().optional(), GOOGLE_REDIRECT_URI: optionalUrl,
+  GITHUB_CLIENT_ID: z.string().optional(), GITHUB_CLIENT_SECRET: z.string().optional(), GITHUB_REDIRECT_URI: optionalUrl,
   SMTP_HOST: z.string().optional(), SMTP_PORT: z.coerce.number().int().positive().default(587), SMTP_SECURE: z.string().default('false').transform(v => v === 'true'), SMTP_USER: z.string().optional(), SMTP_PASSWORD: z.string().optional(), EMAIL_FROM: z.string().optional(),
   DOCKER_RUNTIME: z.string().default('false').transform(v => v === 'true')
 }).superRefine((v, ctx) => {

@@ -124,3 +124,33 @@ describe('cookie secure flag', () => {
     await expect(loadConfig({ ...prod, COOKIE_SECURE: 'yes' })).rejects.toThrow(ZodError);
   });
 });
+
+describe('empty compose environment values', () => {
+  it('treats empty optional settings as unset instead of failing to boot', async () => {
+    const { config } = await loadConfig({
+      NODE_ENV: 'production',
+      JWT_SECRET: 'g'.repeat(48),
+      GOOGLE_CLIENT_ID: '',
+      GOOGLE_CLIENT_SECRET: '',
+      GOOGLE_REDIRECT_URI: '',
+      GITHUB_CLIENT_ID: '',
+      GITHUB_CLIENT_SECRET: '',
+      GITHUB_REDIRECT_URI: '',
+      GITHUB_TOKEN: '',
+      SMTP_HOST: '',
+      SMTP_USER: '',
+      SMTP_PASSWORD: '',
+      EMAIL_FROM: '',
+      MCP_SERVERS: '',
+      COOKIE_SECURE: '',
+      SYSTEM_ADMIN_EMAILS: ''
+    });
+    expect(config.GOOGLE_REDIRECT_URI).toBeUndefined();
+    expect(config.GITHUB_REDIRECT_URI).toBeUndefined();
+    expect(config.COOKIE_SECURE).toBe(false);
+  });
+
+  it('still rejects a malformed redirect uri', async () => {
+    await expect(loadConfig({ GOOGLE_REDIRECT_URI: 'not-a-url' })).rejects.toThrow(ZodError);
+  });
+});
