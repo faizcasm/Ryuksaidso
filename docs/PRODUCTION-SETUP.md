@@ -437,6 +437,33 @@ These are set by `OLLAMA_URL_DOCKER` / `OMNIROUTE_URL_DOCKER` in `.env` (product
 per-organization model (`Organization.ollamaModel`, editable via `PATCH /api/llm`)
 is what runs actually execute with; the env value is only the fallback.
 
+Note that `llm-proxy` binds `172.17.0.1` only (its first configured bind address), so from the host itself you must use `http://172.17.0.1:20129/v1` — `127.0.0.1:20129` is refused. Containers use `http://host.docker.internal:20129/v1`, which resolves to the same address.
+
+## Hosting OmniRoute when the instance is too small
+
+`omniroute` unpacks to roughly 2.7 GB (its `node_modules` alone is ~2.2 GB) and wants 300–600 MB of RAM at runtime — it does not fit alongside the stack on a 1 GB instance with 1.7 GB free. Two workable options:
+
+**A. Reverse-tunnel it from the workstation that already runs it.** The workstation holds a reverse tunnel so the instance's loopback becomes the workstation's gateway — precisely where `llm-proxy` already forwards `20129 → 127.0.0.1:20128`:
+
+```bash
+ssh -N -T -i <key>.pem -o BatchMode=yes -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+  -R 127.0.0.1:20128:127.0.0.1:20128 ubuntu@<host>
+```
+
+Run it under systemd (`Restart=always`, `RestartSec=5`) next to an `omniroute serve --port 20128 --no-open --no-tray` unit, and `loginctl enable-linger <user>` so both survive logout and reboot. The forward binds `127.0.0.1:20128` on the instance (`GatewayPorts no` is the sshd default), so the gateway is never reachable from the internet — confirm with `ss -ltnp | grep 20128`.
+
+When the workstation drops offline, `/ready` reports `503` for the OmniRoute provider and runs fail with a connection error; the rest of the stack keeps serving and the tunnel unit reconnects on its own.
+
+**B. Resize the instance** (t3.small or larger with ≥10 GB EBS), then install natively: Node 22 (the package engines require `>=22.22.2 <23`), `npm i -g omniroute`, and a systemd service running `omniroute serve --port 20128 --no-open` as a non-root user with `Restart=always`. Copy `~/.omniroute/storage.sqlite` and `~/.omniroute/.env` (holds `STORAGE_ENCRYPTION_KEY`) from the existing installation to keep provider connections and API keys.
+
+Verify either way:
+
+```bash
+curl -fsS http://172.17.0.1:20129/v1/models -H "Authorization: Bearer $OMNIROUTE_API"
+curl -fsS http://127.0.0.1/ready     # expect "status":"ready" with OMNIROUTE ok
+```
+
 # Appendix B — Password recovery
 
 Set SMTP variables before enabling public password recovery:
