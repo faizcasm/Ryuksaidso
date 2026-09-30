@@ -145,11 +145,11 @@ Two ways:
 
 What the workflow does on the server:
 
-1. `mkdir -p /opt/ryuksaidso` and untars `docker-compose.prod.yml`, `docker-compose.tls.yml`, `infra/` into it.
+1. `mkdir -p /opt/ryuksaidso` and copies `docker-compose.prod.yml`, `docker-compose.tls.yml`, `infra/` into it **in place** (existing files are overwritten through the same inode so bind-mounted configs inside running containers stay attached).
 2. Exports `IMAGE_TAG=<sha-<commit> | your tag>`, then `docker compose -f docker-compose.prod.yml pull migrate api worker web`.
-3. `docker compose -f docker-compose.prod.yml up -d --remove-orphans`, then `nginx -s reload`.
-4. **Health gate**: polls `http://127.0.0.1/healthz` (nginx) **and** `http://127.0.0.1/health` (API) up to 36 × 5 s.
-5. On success: writes the tag to `/opt/ryuksaidso/.last-good-tag` and prints `docker compose ps`.
+3. `docker compose -f docker-compose.prod.yml up -d --remove-orphans`, a forced `nginx` recreation (so `tls.conf` is re-rendered from its template and mounts are re-resolved) and `nginx -s reload`.
+4. **Health gate**: polls `https://127.0.0.1/healthz`, `/health` and `/` (HTTP when the TLS overlay is off) up to 36 × 5 s.
+5. On success: writes the tag to `/opt/ryuksaidso/.last-good-tag`, prints `docker compose ps`, then prunes dangling layers and image tags other than the running and previous release so the small root disk never fills up.
 6. On failure: dumps `--tail=200` logs, sets `IMAGE_TAG` back to `.last-good-tag` and runs `up -d` again (**automatic rollback**), then fails the workflow.
 
 Verify manually over SSH:

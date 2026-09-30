@@ -118,6 +118,10 @@ jobs:
             echo "$IMAGE_TAG" > .last-good-tag
             echo "Deploy healthy"
             dc ps
+            docker image prune -f >/dev/null 2>&1 || true
+            docker images --format '{{.Repository}}:{{.Tag}}' | grep ryuksaidso | grep -v ":${IMAGE_TAG}$" | grep -v ":${PREV_TAG:-__none__}$" | while read -r img; do
+              docker rmi "$img" >/dev/null 2>&1 || true
+            done || true
             exit 0
           fi
           echo "Health gate failed, collecting logs"
