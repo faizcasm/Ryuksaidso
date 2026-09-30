@@ -13,7 +13,7 @@ import { softFail } from './util';
 export type { ToolDef, ToolContext, BuildToolsDeps } from './types';
 export { calculate } from './calc';
 export { loadMcpTools, mcpConfigured, resetMcpCache } from './mcp';
-export { currentTimeTool, currentWeatherTool, webSearchTool, githubTool } from './external';
+export { currentTimeTool, currentWeatherTool, webSearchTool, githubTool, webSearchTransport } from './external';
 export {
   currencyConvertTool,
   unitConvertTool,
