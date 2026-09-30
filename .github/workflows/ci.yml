@@ -129,6 +129,6 @@ jobs:
           push: false
           tags: ryuksaidso/${{ matrix.image }}:ci
           build-args: |
-            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api' }}
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || '' }}
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,scope=${{ matrix.image }},mode=max
