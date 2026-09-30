@@ -1,492 +1,97 @@
-# Ryuksaidso - Production Ready Platform
-## Quick Start & Deployment Guide
+# Ryuksaidso — Quick Start
 
----
+A condensed getting-started guide. For the full picture use [README.md](README.md); for production use [docs/PRODUCTION-SETUP.md](docs/PRODUCTION-SETUP.md).
 
-## 🚀 What's Been Built
+## Prerequisites
 
-### ✅ Beautiful `/docs` Page
-A comprehensive, interactive documentation system featuring:
-- **8 detailed sections** covering the entire platform
-- **Responsive sidebar navigation** with active section highlighting
-- **Beautiful gradient header** with Ryuksaidso branding
-- **Code blocks** with syntax highlighting
-- **Feature cards** with icons and descriptions
-- **Timeline visualizations** for process flows
-- **Mobile-optimized layout** for all devices
-- **Dark/Light theme support** via CSS variables
+- Node.js 22 + `pnpm` 10.15 (`corepack enable`)
+- Docker with the compose plugin
+- Optional, for the default local model runtime: [Ollama](https://ollama.com)
 
-**Sections:**
-1. Overview - Platform introduction
-2. Getting Started - Setup and installation
-3. Architecture - System design overview
-4. Agents & Workflows - Agent lifecycle
-5. Tool Gateway - Tool integration with MCP
-6. Approval System - Human-in-the-loop workflows
-7. Monitoring & Observability - Real-time metrics
-8. Deployment - Production setup guide
+## 1. Configure the environment
 
----
-
-## 🎨 Interactive `/architecture` Page
-A stunning 3D visualization featuring:
-
-### **3D Canvas Visualization**
-- Real-time rotating 3D system diagram
-- Clickable components with detailed information
-- Dynamic data flow visualization
-- Adjustable rotation speed (0x - 2x)
-- Play/Pause/Reset animation controls
-- Component selection with glowing effects
-
-### **6 System Components**
-1. **Web Dashboard** (cyan) - Next.js 15 SPA
-2. **API Server** (purple) - Express.js backend
-3. **Worker Processes** (orange) - BullMQ job queue
-4. **PostgreSQL** (green) - Data persistence
-5. **Redis** (red) - Cache & job queue
-6. **OLLAMA LLM** (violet) - Local LLM inference
-
-### **6 Data Flows**
-- HTTP/REST (Web ↔ API)
-- Queries (API/Worker ↔ PostgreSQL)
-- Cache/Jobs (API/Worker ↔ Redis)
-- Dequeue (Worker ← Redis)
-- Updates (Worker → PostgreSQL)
-- Inference (Worker → OLLAMA)
-
-### **Detailed Features**
-- **Component Details Panel** - Full overview of selected component
-- **Dependencies View** - Show which components depend on each other
-- **Data Flows** - Visualize communication patterns
-- **Feature Grid** - 6 core platform capabilities
-- **Quick Deployment** - One-click Docker deployment guide
-
----
-
-## 🛠️ Setup & Deployment
-
-### **Option 1: Docker Compose (Recommended)**
 ```bash
-cd ryuksaidsoproductionready
+cp .env.example .env
 
-# Build and start all services
-docker compose up --build
-
-# Services will be available at:
-# - Web Dashboard: http://localhost:3000
-# - API Server: http://localhost:4001
-# - PostgreSQL: localhost:5433
-# - Redis: localhost:6379
-# - OLLAMA: http://localhost:11434
-# - Prometheus: http://localhost:9090
-# - Grafana: http://localhost:3001
+openssl rand -base64 48   # -> JWT_SECRET
+openssl rand -hex 32      # -> POSTGRES_PASSWORD (alphanumeric so it fits DATABASE_URL)
+openssl rand -base64 24   # -> GRAFANA_ADMIN_PASSWORD
 ```
 
-### **Option 2: Local Development**
+Edit `.env` and set those three values. Everything else has working local defaults.
+
+## 2. Start the stack
+
+**Option A — everything in Docker (recommended first run):**
+
 ```bash
-# Install dependencies
+ollama serve                                  # optional, separate terminal
+ollama pull qwen2.5-coder:3b-instruct-q4_K_M  # optional
+docker compose up --build
+```
+
+**Option B — apps on the host, data in Docker:**
+
+```bash
+docker compose up -d postgres redis
 pnpm install
-
-# Build all projects
-pnpm build
-
-# Start development server (if available)
+pnpm db:generate && pnpm db:migrate
 pnpm dev
-
-# Access at http://localhost:3000
 ```
 
----
-
-## 📍 Accessing the Pages
-
-### **Documentation Page**
-```
-http://localhost:3000/docs
-```
-Features:
-- Interactive sidebar navigation
-- 8 comprehensive sections
-- Beautiful gradient design
-- Responsive layout
-- Code examples
-- Feature highlights
-
-### **Architecture Page**
-```
-http://localhost:3000/architecture
-```
-Features:
-- 3D interactive visualization
-- Real-time rotating components
-- Clickable component details
-- Animation controls
-- Data flow visualization
-- Feature showcase
-- Deployment guide
-
-### **Homepage**
-```
-http://localhost:3000
-```
-- Platform introduction
-- Key features overview
-- Quick navigation
-
----
-
-## 🎯 Key Features
-
-### **Documentation System**
-✅ Organized into 8 sections
-✅ Beautiful gradient design
-✅ Responsive sidebar navigation
-✅ Code blocks with syntax highlighting
-✅ Feature cards and icons
-✅ Timeline visualizations
-✅ Mobile-friendly layout
-✅ Accessibility compliant
-
-### **Architecture Visualization**
-✅ Interactive 3D canvas
-✅ Real-time animation (60fps)
-✅ Clickable components
-✅ Dependency tracking
-✅ Data flow visualization
-✅ Animation controls
-✅ Component details panel
-✅ Mobile responsive
-
-### **System Architecture**
-✅ Frontend: Next.js 15 (React 19)
-✅ Backend: Express.js with full lifecycle management
-✅ Queue: BullMQ for async job processing
-✅ Data: PostgreSQL for persistence
-✅ Cache: Redis for performance
-✅ LLM: OLLAMA for local inference
-✅ Auth: JWT-based authentication
-✅ Monitoring: Real-time metrics and traces
-
----
-
-## 📊 Build Status
-
-All projects compile successfully ✅
-
-```
-Build Results:
-├─ @ryuksaidso/api ..................... ✅ Done
-├─ @ryuksaidso/web ..................... ✅ Done (12 pages)
-│  ├─ /
-│  ├─ /docs ............................ NEW
-│  ├─ /architecture .................... NEW
-│  ├─ /auth/callback
-│  ├─ /auth/error
-│  ├─ /invite
-│  ├─ /reset-password
-│  └─ /verify-email
-├─ @ryuksaidso/worker .................. ✅ Done
-└─ @ryuksaidso/agent-runtime ........... ⊘ Skipped (unused)
-
-Total: 4 of 5 workspace projects
-Total Pages: 12 (2 new documentation pages)
-Build Time: ~30 seconds
-```
-
----
-
-## 🔧 Configuration
-
-### **Environment Variables**
-```env
-# Database
-DATABASE_URL=postgresql://ryuksaidso:password@localhost:5433/ryuksaidso?schema=public
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# OLLAMA
-OLLAMA_URL=http://localhost:11434/v1
-OLLAMA_MODEL=qwen2.5-coder:3b-instruct-q4_K_M
-
-# JWT (openssl rand -base64 48, must be >= 48 chars in production)
-JWT_SECRET=your-secret-key-here-at-least-48-characters-long
-
-# API Port
-API_PORT=4001
-
-# CORS Origin
-CORS_ORIGIN=http://localhost:3000
-```
-
-### **Docker Services**
-```yaml
-Services Included:
-├─ PostgreSQL ............. Database
-├─ Redis .................. Cache & Queue
-├─ OLLAMA ................. LLM Provider
-├─ API Server ............. Express backend
-├─ Web Dashboard .......... Next.js frontend
-├─ Worker Processes ....... BullMQ workers
-├─ Prometheus ............. Metrics collection
-├─ Grafana ................ Metrics visualization
-├─ Loki ................... Log aggregation
-└─ Promtail ............... Log shipper
-```
-
----
-
-## 📱 User Interface
-
-### **Responsive Design**
-- ✅ Desktop (1920px+) - Full features
-- ✅ Tablet (768px - 1919px) - Optimized layout
-- ✅ Mobile (< 768px) - Touch-friendly
-
-### **Theme Support**
-- ✅ Dark theme (default)
-- ✅ Light theme
-- ✅ System theme detection
-- ✅ CSS variables for customization
-
-### **Accessibility**
-- ✅ Semantic HTML
-- ✅ ARIA labels
-- ✅ Keyboard navigation
-- ✅ High contrast support
-- ✅ Screen reader friendly
-
----
-
-## 🚀 Production Deployment
-
-### **Pre-Deployment Checklist**
-- [ ] All environment variables configured
-- [ ] Database initialized and migrated
-- [ ] Redis instance running
-- [ ] OLLAMA service available
-- [ ] SSL certificates configured (if needed)
-- [ ] Rate limiting configured
-- [ ] Monitoring enabled
-- [ ] Backups configured
-
-### **Deploy Command**
-```bash
-# Production build
-pnpm build
-
-# Start services
-docker compose up --build
-
-# Or with specific services
-docker compose up -d api web worker postgres redis ollama
-```
-
-### **Verify Deployment**
-```bash
-# Check services
-curl http://localhost:3001/health
-curl http://localhost:3001/ready
-
-# View logs
-docker compose logs -f api
-docker compose logs -f worker
-
-# Access dashboard
-open http://localhost:3000
-open http://localhost:3000/docs
-open http://localhost:3000/architecture
-```
-
----
-
-## 📈 Monitoring
-
-### **Available Metrics**
-- Agent execution success rate
-- Average latency and token usage
-- Job queue depth and processing rate
-- Approval request volume and resolution time
-- Database connection pool stats
-- Redis memory and operations
-
-### **Monitoring Access**
-- **Grafana**: http://localhost:3000 (if available)
-- **Prometheus**: http://localhost:9090 (if available)
-- **API Metrics**: http://localhost:3001/metrics
-
----
-
-## 🐛 Troubleshooting
-
-### **Issues & Solutions**
-
-**Docker won't build:**
-```bash
-# Clear Docker cache and rebuild
-docker compose down -v
-docker system prune -f
-docker compose up --build
-```
-
-**Port conflicts:**
-```bash
-# Check what's using port 3000
-lsof -i :3000
-
-# Change port in docker-compose.yml
-```
-
-**Database connection failed:**
-```bash
-# Verify PostgreSQL is running
-docker compose ps postgres
-
-# Check database URL in .env
-# Default: postgresql://postgres:postgres@postgres:5432/ryuksaidso
-```
-
-**OLLAMA not responding:**
-```bash
-# Pull the model
-docker exec ollama ollama pull qwen2.5-coder:3b-instruct-q4_K_M
-
-# Test connection
-curl http://localhost:11434/api/tags
-```
-
----
-
-## 📚 Documentation Structure
-
-### **/docs Page Layout**
-```
-Documentation
-├─ Sidebar Navigation
-│  ├─ Overview
-│  ├─ Getting Started
-│  ├─ Architecture
-│  ├─ Agents & Workflows
-│  ├─ Tool Gateway
-│  ├─ Approval System
-│  ├─ Monitoring
-│  └─ Deployment
-├─ Main Content Area
-│  ├─ Section Header
-│  ├─ Breadcrumb Navigation
-│  ├─ Version Info
-│  └─ Content with Code Blocks
-└─ Footer Links
-   ├─ Architecture View
-   └─ Author Info
-```
-
-### **/architecture Page Layout**
-```
-Architecture
-├─ Header
-│  ├─ Branding
-│  └─ Navigation Links
-├─ Main Container
-│  ├─ Sidebar
-│  │  ├─ 3D Controls
-│  │  ├─ Speed Slider
-│  │  ├─ Play/Pause/Reset
-│  │  └─ Component List
-│  └─ Main Area
-│     ├─ 3D Canvas
-│     ├─ Component Details
-│     ├─ Features Grid
-│     └─ Deployment Guide
-```
-
----
-
-## 🎓 Learning Path
-
-1. **Start with Homepage**
-   - Understand the platform overview
-   - See key features
-
-2. **Read Documentation (/docs)**
-   - Getting Started section first
-   - Then Architecture overview
-   - Deep dive into specific features
-
-3. **Explore Architecture (/architecture)**
-   - View 3D visualization
-   - Click components for details
-   - Understand data flows
-
-4. **Set Up Locally**
-   - Follow Getting Started guide
-   - Configure environment
-   - Deploy with Docker
-
-5. **Deploy to Production**
-   - Use deployment guide
-   - Configure monitoring
-   - Set up backups
-
----
-
-## 📞 Support & Resources
-
-### **Project Structure**
-```
-ryuksaidsoproductionready/
-├─ apps/
-│  ├─ api/ ................... Express.js backend
-│  ├─ web/ ................... Next.js frontend
-│  └─ worker/ ................ BullMQ workers
-├─ packages/
-│  └─ agent-runtime/ ......... Agent runtime (unused)
-├─ docs/ ..................... Additional documentation
-├─ docker-compose.yml ........ Service orchestration
-└─ README.md ................. Project overview
-```
-
-### **Key Files**
-- `/apps/web/src/app/docs/page.tsx` - Documentation page
-- `/apps/web/src/app/architecture/page.tsx` - Architecture page
-- `/apps/api/src/routes/docs.ts` - API documentation endpoint
-- `/docker-compose.yml` - Container orchestration
-- `.env.example` - Environment template
-
-### **Author**
-- **Faizan Hameed**
-- Website: http://faizcasm.me
-- Platform: Ryuksaidso v2.0.0
-- Release Date: September 21, 2026
-
----
-
-## ✅ Final Checklist
-
-- ✅ Beautiful `/docs` page with 8 sections
-- ✅ Interactive `/architecture` page with 3D visualization
-- ✅ All TypeScript errors fixed
-- ✅ Build system working
-- ✅ Docker configuration ready
-- ✅ Responsive design implemented
-- ✅ Theme support enabled
-- ✅ Accessibility compliant
-- ✅ Production ready
-- ✅ Documentation complete
-
----
-
-## 🎉 You're Ready!
+## 3. Open the control plane
+
+| Service | URL |
+|---|---|
+| Control plane | http://localhost:3000 |
+| API (base for all client calls) | http://localhost:4001/api |
+| API liveness / readiness / metrics | http://localhost:4001/health · /ready · /metrics |
+| Postgres | localhost:5433 |
+| Redis | localhost:6379 |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3001 |
+| Loki | http://localhost:3100 |
+
+Create a workspace at http://localhost:3000 (the first account becomes OWNER of a new organization with a default project, four agents and three policies provisioned).
+
+## 4. Run the first workflow
+
+1. **Run Lab** → run the default Resolution Agent with a real operational prompt.
+2. **Traces** → inspect the persisted planner, tool and synthesizer steps (run ID, agent version, environment, latency, token usage, terminal status).
+3. **Knowledge** → add a document, rerun the same question, and see retrieval evidence appear in the trace.
+4. **Policies** → keep `ticket:write` approval-required; ask for a ticket write and watch the run park in `WAITING_APPROVAL` under **Approvals**.
+5. Approve it → a continuation run (`trigger=approval-resume`) is queued; the original history is untouched.
+6. **Evaluations** → persist a regression dataset result; it shows up as the dashboard ship signal.
+7. **Developer** → create an API key (`rsk_...`, shown once) and queue a run from CI with `POST /api/control/runs` (see [API.md](API.md)).
+
+## 5. Know the quality commands
 
 ```bash
-# Get started:
-cd ryuksaidsoproductionready
-docker compose up --build
-
-# Then visit:
-http://localhost:3000/docs
-http://localhost:3000/architecture
+pnpm lint        # ESLint flat config
+pnpm typecheck   # tsc --noEmit, all workspaces
+pnpm test        # vitest — 114 tests (apps/api/src/__tests__)
+pnpm build       # prisma + tsc + next build
 ```
 
-**The platform is production-ready with beautiful documentation and interactive architecture visualization!** 🚀
+All four run in CI on every push/PR to `main`. Project convention: **no comments in source files** — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## 6. Documentation map
+
+- [README.md](README.md) — product, layout, stack, env vars, CI/CD, deployment overview
+- [API.md](API.md) — complete endpoint reference (auth, CSRF, bodies, errors)
+- [ARCHITECTURE.md](ARCHITECTURE.md) — runtime pipeline and production topology
+- [docs/PRODUCTION-SETUP.md](docs/PRODUCTION-SETUP.md) — AWS EC2 runbook
+- [docs/FEATURES.md](docs/FEATURES.md) · [docs/DEMO.md](docs/DEMO.md) · [docs/PROJECT_PITCH.md](docs/PROJECT_PITCH.md)
+- [DETAILRYUKSAIDSO.md](DETAILRYUKSAIDSO.md) — long-form project document
+- In-app: http://localhost:3000/docs and http://localhost:3000/architecture
+
+## Troubleshooting quick hits
+
+- `/ready` returns 503 → no LLM provider reachable; start Ollama or set `OMNIROUTE_*`, then check `curl http://localhost:4001/ready`.
+- Port already in use → `docker compose ps` and stop the conflicting service (3000/4001/5433/6379).
+- Reset local data → `docker compose down -v` (destroys Postgres/Redis volumes), then `pnpm db:migrate` and start again.
+- Migration issues → `pnpm db:generate && pnpm db:migrate`.
+
+---
+
+**Author**: Faizan Hameed · http://faizcasm.me · RYUKSAIDSO v2.0.0

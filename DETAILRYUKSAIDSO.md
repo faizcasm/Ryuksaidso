@@ -318,9 +318,10 @@ ryuksaidsoproductionready/
 ├── docs/                     # FEATURES.md, PROJECT_PITCH.md, PRODUCTION-SETUP.md, DEMO.md
 ├── docker-compose.yml        # 11 services
 ├── .env.example              # full configuration template
-├── README.md · ARCHITECTURE.md · API.md · QUICK_START.md
-├── ALL_BUGS_FIXED.md         # full fix history across batches
-└── (many historical docs: FIXES, RBAC, PRODUCTION_*, COMPREHENSIVE_FIXES…)
+├── README.md · ARCHITECTURE.md · API.md · QUICK_START.md · CONTRIBUTING.md
+├── docker-compose.prod.yml   # production stack: nginx LB, api replicas, migrate job
+├── docker-compose.tls.yml    # certbot + HTTPS overlay
+└── .github/workflows/        # ci.yml · docker.yml · deploy.yml
 ```
 
 **Scale**: ~20,300 lines of TS/TSX across apps + packages (excluding build output).
@@ -659,7 +660,7 @@ pnpm test       # vitest (API suites)
 | **End-to-end** | `tools-e2e.sh` against the live Docker stack | **ALL PASS (50+ checks)**: registry, agent+prompt persistence, 4 completed LLM runs (time/calculator, weather with real conditions, web_search, github, dedicated **new-tools run**), system-prompt persona in answers, ticket → OmniRoute → approval → continuation + reply, evaluation answered by OmniRoute with per-case results |
 | **Live smokes** | curl/node against running services | 72 °F→22.22 °C, 10 km→6.21 mi, unicode base64 round-trip, 250 USD→23955 INR (ECB), Wiktionary fallback, HN list, weather London 18.6 °C + forced-fallback Tokyo 21.2 °C, admin overview payload, `no-store` headers |
 
-Full fix/verification history is logged in **`ALL_BUGS_FIXED.md`** (batches: control plane, RBAC, tooling/providers, slug validation, Chromium removal, UX & analytics).
+Full fix/verification history is recorded in the git log (`git log --oneline`); batch summaries were folded into `README.md`, `ARCHITECTURE.md`, `API.md` and `docs/`.
 
 ---
 
@@ -714,8 +715,7 @@ Engineering hygiene notes:
 | `docs/PRODUCTION-SETUP.md` | Production environment setup (incl. Docker LLM routing) |
 | `docs/DEMO.md` | Demo script |
 | `QUICK_START.md` | Extended quick start |
-| `ALL_BUGS_FIXED.md` | Chronological fix log with verification records (authoritative history) |
-| `RBAC_*.md`, `PRODUCTION_*.md`, `FIXES*.md`, `COMPREHENSIVE_FIXES.md`, `IMPLEMENTATION_SUMMARY.md` | Historical batch documentation |
+| `docs/RBAC.md` | Both role layers, guard rules and capability matrix |
 | `DETAILRYUKSAIDSO.md` | **This document — the complete reference** |
 
 ---

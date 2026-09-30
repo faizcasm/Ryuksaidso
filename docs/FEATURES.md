@@ -41,30 +41,34 @@
 ## Identity and security
 
 - Email/password sign-in
-- Workspace creation
+- Workspace creation and workspace switching
+- Workspace invitations (email link, 7-day single-use token)
+- Email verification (registration + re-send from Settings)
 - Google OAuth
 - GitHub OAuth
 - Forgot-password email flow
 - Single-use reset tokens
-- Session revocation after password reset
+- Session revocation after password reset and on password change
 - HTTP-only cookies
 - CSRF protection
-- API-key authentication
+- API-key authentication (hashed secrets, shown once)
 - Audit logging
+- Rate limiting with `RateLimitExceeded` responses
 
 ## Control plane
 
 - Command Center
 - Run Lab
-- Agent Registry
+- Agents
 - Projects
 - Tickets (threaded agent replies + approval-gated writes)
-- Trace Explorer
+- Traces
 - Evaluations (persisted per-case scores, run history)
 - Approval Center
 - Knowledge Base (per-agent scoping, conversational retrieval)
 - Policies
 - Developer/API keys
+- Docs and Architecture pages
 - Profile editing
 - Password management
 - Workspace settings

@@ -25,17 +25,17 @@ Most AI demos stop at prompt → answer. RYUKSAIDSO focuses on the engineering s
 - TypeScript
 - Next.js 15 / React 19
 - Express 5
-- PostgreSQL + pgvector
-- Redis + BullMQ
-- Prisma
-- OpenAI-compatible LLM providers / Ollama
-- Prometheus / Loki / Grafana
-- Docker Compose
+- PostgreSQL 16 + pgvector (Prisma)
+- Redis 7 + BullMQ
+- OpenAI-compatible LLM providers / Ollama with automatic fallback
+- nginx + certbot (TLS), Docker Compose
+- Prometheus / Loki / Grafana / Promtail
+- GitHub Actions CI/CD with health-gated deploys and rollback
 
 ## Interview walkthrough
 
 1. Show the Run Lab and start a real execution.
-2. Open the Trace Explorer and explain the planner → tool gateway → synthesizer lifecycle.
+2. Open Traces and explain the planner → tool gateway → synthesizer lifecycle.
 3. Create or enable a `ticket:write` policy and demonstrate that a model request cannot directly mutate the database.
 4. Open Approvals, approve the action, and point out that RYUKSAIDSO creates a continuation run rather than rewriting history.
 5. Open Agents and publish a new version.
