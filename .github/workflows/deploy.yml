@@ -58,7 +58,15 @@ jobs:
         run: |
           ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" 'mkdir -p /opt/ryuksaidso'
           tar czf - docker-compose.prod.yml docker-compose.tls.yml infra | \
-            ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" 'tar xzf - -C /opt/ryuksaidso'
+            ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" '
+              staging="$(mktemp -d)"
+              trap "rm -rf \"$staging\"" EXIT
+              tar xzf - -C "$staging"
+              for f in docker-compose.prod.yml docker-compose.tls.yml; do
+                if [ -f "/opt/ryuksaidso/$f" ]; then cp -f "$staging/$f" "/opt/ryuksaidso/$f"; else cp "$staging/$f" /opt/ryuksaidso/; fi
+              done
+              if [ -d /opt/ryuksaidso/infra ]; then cp -Rf "$staging"/infra/. /opt/ryuksaidso/infra/; else cp -R "$staging"/infra /opt/ryuksaidso/; fi
+            '
       - name: Pull, restart and health gate
         if: steps.target.outputs.skip == 'false'
         run: |
@@ -72,7 +80,14 @@ jobs:
           SCHEME="http"
           CURL_OPTS=""
           NGINX_ID="$(docker compose -f docker-compose.prod.yml ps -q nginx 2>/dev/null | head -n1 || true)"
+          TLS_ON=""
           if [ -n "$NGINX_ID" ] && docker inspect --format '{{range .Mounts}}{{println .Destination}}{{end}}' "$NGINX_ID" 2>/dev/null | grep -q '^/etc/nginx/templates/tls.conf.template$'; then
+            TLS_ON="1"
+          fi
+          if [ -z "$TLS_ON" ] && grep -qE '^DOMAIN=.+' .env 2>/dev/null; then
+            TLS_ON="1"
+          fi
+          if [ -n "$TLS_ON" ]; then
             COMPOSE_FILES+=(-f docker-compose.tls.yml)
             export COMPOSE_PROFILES="${COMPOSE_PROFILES:-tls}"
             SCHEME="https"
@@ -82,6 +97,7 @@ jobs:
           echo "Deploying image tag: $IMAGE_TAG (previous good: ${PREV_TAG:-none}) (scheme: $SCHEME)"
           dc pull migrate api worker web
           dc up -d --remove-orphans
+          dc up -d --force-recreate nginx
           dc exec -T nginx nginx -s reload || true
           ok=0
           for i in $(seq 1 36); do
