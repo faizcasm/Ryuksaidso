@@ -166,7 +166,8 @@ const FACES: { idx: number[]; n: Vec3 }[] = [
 
 function resolveApiServerHref(): string {
   const raw = process.env.NEXT_PUBLIC_API_URL;
-  if (!raw) return "/docs";
+  if (!raw) return process.env.NODE_ENV === 'production' ? '/health' : '/docs';
+  if (raw.startsWith('/')) return '/health';
   try {
     return new URL(raw).origin + "/health";
   } catch {

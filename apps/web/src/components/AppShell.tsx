@@ -52,7 +52,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import icon from "../app/icon.png";
-import { api } from "../lib/api";
+import { api, API } from "../lib/api";
 import { isAdmin as isAdminRole } from "../lib/roles";
 
 type User = {
@@ -765,9 +765,7 @@ export default function AppShell() {
     }
   }
   function oauth(provider: "google" | "github") {
-    window.location.assign(
-      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:4001/api"}/auth/oauth/${provider}`,
-    );
+    window.location.assign(`${API}/auth/oauth/${provider}`);
   }
   async function logout() {
     await api("/auth/logout", { method: "POST" }).catch(() => {});

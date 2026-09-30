@@ -129,7 +129,7 @@ chmod 600 ~/.ssh/authorized_keys
 
 | Variable | Value | Notes |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | `https://<domain>/api` | Optional; baked into the **web image at build time** as a Docker build-arg. Set it before the first push to `main`, otherwise the image defaults to `http://localhost:4001/api` and the browser will call the wrong origin. |
+| `NEXT_PUBLIC_API_URL` | `https://<domain>/api` | Optional. Baked into the **web image at build time** as a Docker build-arg. Production builds fall back to the same-origin `/api`, which the reverse proxy forwards, so you normally leave this unset — set it only when the API is served from a different origin than the UI. |
 
 **Before the secrets exist**
 

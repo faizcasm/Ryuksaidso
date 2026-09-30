@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { type UserWithRole } from '@/lib/roles';
+import { API } from '../lib/api';
 
 interface UseUserRoleReturn {
   user: UserWithRole | null;
@@ -22,7 +23,6 @@ export function useUserRole(): UseUserRoleReturn {
       setIsLoading(true);
       setError(null);
 
-      const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
       const response = await fetch(`${API}/admin/me/role`, {
         method: 'GET',
         headers: {
@@ -84,8 +84,6 @@ export function useManageUserRoles(): UseManageUserRolesReturn {
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
 
   const fetchUsers = async () => {
     try {
