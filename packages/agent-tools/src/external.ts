@@ -226,6 +226,20 @@ const decodeBingUrl = (href: string): string => {
   return /^https?:\/\//i.test(value) ? value : '';
 };
 
+const SEARCH_STOPWORDS = new Set([
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'of', 'in', 'on', 'at', 'to', 'for', 'and', 'or', 'not',
+  'with', 'what', 'who', 'when', 'where', 'why', 'how', 'which', 'tell', 'show', 'please', 'current', 'latest', 'now',
+  'today', 'find', 'get',
+]);
+
+const searchTokens = (text: string): Set<string> =>
+  new Set(
+    text
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length >= 2 && !SEARCH_STOPWORDS.has(token)),
+  );
+
 async function bing(query: string, limit: number): Promise<SearchHit[]> {
   const response = await fetch(
     `https://www.bing.com/search?q=${encodeURIComponent(query)}&format=rss`,
@@ -241,7 +255,7 @@ async function bing(query: string, limit: number): Promise<SearchHit[]> {
   const xml = await response.text();
   const hits: SearchHit[] = [];
   for (const chunk of xml.split('<item>').slice(1)) {
-    if (hits.length >= limit) break;
+    if (hits.length >= 10) break;
     const title = /<title>([\s\S]*?)<\/title>/.exec(chunk);
     const link = /<link>([\s\S]*?)<\/link>/.exec(chunk);
     if (!title || !link) continue;
@@ -255,7 +269,16 @@ async function bing(query: string, limit: number): Promise<SearchHit[]> {
     });
   }
   if (!hits.length) throw new Error('Bing returned no parseable results');
-  return hits;
+  const needles = searchTokens(query);
+  if (needles.size) {
+    const relevant = hits.filter((hit) => {
+      const haystack = searchTokens(`${hit.title} ${hit.snippet} ${hit.url}`);
+      return [...needles].some((token) => haystack.has(token));
+    });
+    if (!relevant.length) throw new Error('Bing returned results unrelated to the query');
+    return relevant.slice(0, limit);
+  }
+  return hits.slice(0, limit);
 }
 
 export const webSearchTool = {

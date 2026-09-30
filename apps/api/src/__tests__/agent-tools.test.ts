@@ -209,6 +209,31 @@ describe('web_search (three-engine fallback)', () => {
     } finally { vi.unstubAllGlobals(); }
   });
 
+  it('rejects a Bing decoy feed and falls through to Wikipedia', async () => {
+    const decoyRss = [
+      '<?xml version="1.0" encoding="utf-8" ?><rss version="2.0"><channel><title>Bing: node.js lts</title>',
+      '<item><title>Quote of the Day - BrainyQuote</title><link>https://www.brainyquote.com/quotes/</link><description>Inspirational quotes for every day.</description></item>',
+      '<item><title>JioHotstar - Watch TV Shows</title><link>https://www.jiohotstar.com/</link><description>Stream movies and shows.</description></item>',
+      '</channel></rss>',
+    ].join('');
+    vi.stubGlobal('fetch', vi.fn((url: string) => {
+      const u = String(url);
+      if (u.includes('duckduckgo')) return html(anomaly, 202);
+      if (u.includes('format=rss')) return html(decoyRss);
+      if (u.includes('wikipedia.org')) return json({ query: { search: [{ title: 'Node.js', snippet: 'A cross-platform JavaScript runtime with LTS releases' }] } });
+      return html('');
+    }));
+    try {
+      const out = await run({ query: 'node.js lts' }) as any;
+      expect(out.engine).toBe('wikipedia');
+      expect(out.note).toContain('unrelated to the query');
+      const urls = (out.results || []).map((r: any) => r.url);
+      expect(urls).not.toContain('https://www.brainyquote.com/quotes/');
+      expect(urls).not.toContain('https://www.jiohotstar.com/');
+      expect(urls[0]).toBe('https://en.wikipedia.org/wiki/Node.js');
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it('reports a soft error naming every engine when all of them fail', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network down'))));
     try {
