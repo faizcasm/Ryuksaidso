@@ -52,6 +52,28 @@ describe('API', () => {
     expect(response.status).toBe(404);
     expect(response.body.error).toBe('NotFound');
   });
+
+  it('rejects unauthenticated API key renames', async () => {
+    const response = await request(app)
+      .patch('/api/api-keys/key1')
+      .set('x-csrf-token', 'test-csrf-token')
+      .set('Cookie', 'ryuksaidso_csrf=test-csrf-token');
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe('Unauthorized');
+  });
+
+  it('validates API key rename payloads before touching the database', async () => {
+    const token = signToken({ id: 'u1', email: 'test@example.com', name: 'Test User', organizationId: 'org1', role: 'OWNER' });
+    const response = await request(app)
+      .patch('/api/api-keys/key1')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', 'test-csrf-token')
+      .set('Cookie', 'ryuksaidso_csrf=test-csrf-token')
+      .send({ name: 'x' });
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('ValidationError');
+    expect(response.body.message).toContain('API key name');
+  });
 });
 
 describe('observability', () => {

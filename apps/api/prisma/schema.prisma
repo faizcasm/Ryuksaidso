@@ -76,7 +76,7 @@ model Organization {
   policies Policy[]
   sessions Session[]
   invitations WorkspaceInvitation[]
-  llmProvider LLMProvider @default(OLLAMA)
+  llmProvider LLMProvider @default(OMNIROUTE)
   // Must match an image that actually exists locally — see OLLAMA_MODEL in .env
   // and migration 20260926150000_set_ollama_model_default.
   ollamaModel String @default("qwen2.5-coder:3b-instruct-q4_K_M")

@@ -153,14 +153,14 @@ Key variables:
 | `SMTP_*`, `EMAIL_FROM` | Real email delivery for verification/reset/invite mails (dev falls back to logging the URL) |
 | `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD` | Grafana bootstrap credentials |
 
-The workspace default provider/model is selected per organization in **Settings → Model provider** (`PATCH /api/llm`); env values are only the fallback.
+The workspace default provider/model is selected per organization in **Settings → Model provider** (`PATCH /api/llm`); new workspaces default to **OmniRoute** and unconfigured providers (for example Ollama without a reachable server) are labelled `unconfigured` in the UI. Env values are only the fallback.
 
 ## Quality commands
 
 ```bash
 pnpm lint         # ESLint flat config (eslint.config.mjs), no-unused-vars etc.
 pnpm typecheck    # tsc --noEmit across api/web/worker/packages
-pnpm test         # vitest — 130 tests in apps/api/src/__tests__
+pnpm test         # vitest — 137 tests in apps/api/src/__tests__
 pnpm build        # prisma generate + tsc for api/worker/packages, next build for web
 pnpm db:generate  # prisma client
 pnpm db:migrate   # apply Prisma migrations
@@ -170,7 +170,7 @@ Project convention: **source files must not contain comments** — no `//`, no `
 
 ## Testing summary
 
-- 11 vitest files, **130 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, evaluator, regressions and HTTP server routes.
+- 11 vitest files, **137 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, evaluator, regressions and HTTP server routes.
 - Tests are hermetic (mocked Prisma/Redis) and run in CI after `pnpm db:generate`.
 - The worker/agent-runtime packages have no standalone unit tests; their behaviour is exercised through the API harness and the running stack.
 

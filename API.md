@@ -156,6 +156,7 @@ All routes require auth. Mutations marked with roles beyond authentication are e
 | POST | `/sessions/revoke-all` | revokes all of the caller's sessions (including current refresh) | `204` |
 | GET | `/api-keys` | returns `[]` for non OWNER/ADMIN; otherwise metadata only (no secret) | `200` |
 | POST | `/api-keys` | **OWNER/ADMIN**; `{ name }` | `201 { id, name, prefix, secret, createdAt }` — `secret` (`rsk_...`) shown once |
+| PATCH | `/api-keys/:id` | **OWNER/ADMIN**; `{ name }` renames the key | `200 { id, name, prefix, lastUsedAt, createdAt }`; `400` invalid name; `404` |
 | DELETE | `/api-keys/:id` | **OWNER/ADMIN** | `204`; `404` |
 | GET | `/audit?limit=` | `limit` 1–250 (default 100) | `200` audit log entries |
 | GET | `/security` | — | `200 { rbac, role, members, pendingApprovals, activeSessions, apiKeys, auditTrail, httpOnlySession }` |

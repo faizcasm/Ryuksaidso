@@ -31,7 +31,7 @@
 
 - Local Ollama
 - OmniRoute OpenAI-compatible gateway
-- Workspace default provider
+- Workspace default provider (OmniRoute for new workspaces)
 - Per-run provider override
 - OmniRoute-first with automatic Ollama fallback for ticket runs and evaluations (connection-level failures only; HTTP errors surface instead of silently re-running)
 - Provider model discovery

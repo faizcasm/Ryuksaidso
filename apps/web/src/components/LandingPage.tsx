@@ -1007,9 +1007,12 @@ export default function LandingPage() {
 
         .hero-canvas {
           position: fixed;
-          inset: 0;
+          top: 70px;
+          right: 0;
+          bottom: 0;
+          left: 0;
           width: 100%;
-          height: 100%;
+          height: calc(100% - 70px);
           z-index: 0;
           pointer-events: none;
         }
@@ -1025,7 +1028,7 @@ export default function LandingPage() {
         .orb-a {
           width: 420px;
           height: 420px;
-          top: -140px;
+          top: 30px;
           right: -120px;
           background: radial-gradient(circle at 30% 30%, rgba(139, 92, 246, 0.35), transparent 70%);
         }
@@ -1044,7 +1047,10 @@ export default function LandingPage() {
 
         .grid-fade {
           position: fixed;
-          inset: 0;
+          top: 70px;
+          right: 0;
+          bottom: 0;
+          left: 0;
           z-index: 0;
           pointer-events: none;
           background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
@@ -1077,7 +1083,7 @@ export default function LandingPage() {
           padding-bottom: 16px;
           padding-left: max(24px, calc((100% - 1180px) / 2));
           padding-right: max(24px, calc((100% - 1180px) / 2));
-          background: rgba(8, 10, 15, 0.72);
+          background: rgba(8, 10, 15, 0.94);
           backdrop-filter: blur(16px);
           -webkit-backdrop-filter: blur(16px);
           border-bottom: 1px solid rgba(255, 255, 255, 0.06);

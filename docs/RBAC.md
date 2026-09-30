@@ -22,7 +22,7 @@ Server-side guards are `requireRole([...])` inside routes (returns `403 Insuffic
 - Role changes revoke the target member's active sessions.
 - Invitations can only grant `ADMIN|AGENT|VIEWER` (default `VIEWER`) and must be accepted by the invited email address.
 
-Listed endpoints: `GET/PATCH /api/members`, `DELETE /api/members/:id`, `GET/POST /api/workspace/invitations`, `DELETE /api/workspace/invitations/:id`, `POST /api/workspace/invitations/accept`, `GET/POST /api/api-keys` (OWNER/ADMIN only), mirrored by `PATCH /api/admin/members/:id/role` and `POST /api/admin/members/:id/revoke-sessions`.
+Listed endpoints: `GET/PATCH /api/members`, `DELETE /api/members/:id`, `GET/POST /api/workspace/invitations`, `DELETE /api/workspace/invitations/:id`, `POST /api/workspace/invitations/accept`, `GET/POST/PATCH /api/api-keys` and `DELETE /api/api-keys/:id` (OWNER/ADMIN only), mirrored by `PATCH /api/admin/members/:id/role` and `POST /api/admin/members/:id/revoke-sessions`.
 
 ## 2. System RBAC (`User.userRole`)
 

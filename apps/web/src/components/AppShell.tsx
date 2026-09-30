@@ -19,6 +19,7 @@ import {
   CircleCheck,
   Clock3,
   Code2,
+  Copy,
   Database,
   FileClock,
   Gauge,
@@ -31,6 +32,7 @@ import {
   LogOut,
   Menu,
   Moon,
+  Pencil,
   Play,
   Plus,
   RefreshCw,
@@ -42,6 +44,7 @@ import {
   Sun,
   TestTube2,
   Ticket,
+  Trash2,
   UserRound,
   Users,
   Workflow,
@@ -410,7 +413,7 @@ export default function AppShell() {
     projectId: "",
     prompt: "",
     environment: "development",
-    provider: "OLLAMA",
+    provider: "OMNIROUTE",
   });
   const [providerState, setProviderState] = useState<ProviderState | null>(
     null,
@@ -566,7 +569,7 @@ export default function AppShell() {
         ...x,
         agentId: x.agentId || ags[0]?.id || "",
         projectId: x.projectId || ags[0]?.projectId || "",
-        provider: (x.provider || dash.metrics.provider || "OLLAMA") as any,
+        provider: (x.provider || dash.metrics.provider || "OMNIROUTE") as any,
       }));
     })();
     coreRefreshRef.current = task;
@@ -737,8 +740,9 @@ export default function AppShell() {
           method: "POST",
           body: JSON.stringify({ email: authForm.email }),
         });
-        setAuthError(
+        notify(
           "If that email exists, a reset link has been sent. Check your inbox.",
+          "success",
         );
         return;
       }
@@ -791,6 +795,7 @@ export default function AppShell() {
       const run = await api<Run>(`/control/runs/${out.runId}`);
       setSelectedRun(run);
       await loadCore();
+      notify("Run queued — the trace is streaming in.", "success");
     } catch (e) {
       setError(readError(e, "Could not start run"));
     } finally {
@@ -812,6 +817,7 @@ export default function AppShell() {
       });
       await inspectRun(out.runId);
       await loadCore();
+      notify("Run retried — a fresh attempt is queued.", "success");
     } catch (e) {
       setError(readError(e, "Could not retry run"));
     }
@@ -824,6 +830,7 @@ export default function AppShell() {
       });
       await loadCore();
       if (selectedRun) await inspectRun(selectedRun.id);
+      notify(approved ? "Approval granted." : "Approval rejected.", "success");
     } catch (e) {
       setError(readError(e, "Could not record decision"));
     }
@@ -835,6 +842,7 @@ export default function AppShell() {
         body: JSON.stringify({ enabled: !a.enabled }),
       });
       await loadCore();
+      notify(a.enabled ? `${a.name} disabled.` : `${a.name} enabled.`, "success");
     } catch (e) {
       setError(readError(e, "Could not update agent"));
     }
@@ -849,6 +857,7 @@ export default function AppShell() {
         }),
       });
       await loadCore();
+      notify(`Version published for ${a.name}.`, "success");
     } catch (e) {
       setError(readError(e, "Could not publish version"));
     }
@@ -862,6 +871,7 @@ export default function AppShell() {
       });
       setProjectForm({ name: "", slug: "", description: "" });
       await loadCore();
+      notify("Project created.", "success");
     } catch (e) {
       setError(readError(e, "Could not create project"));
     }
@@ -888,6 +898,7 @@ export default function AppShell() {
         tools: ["search_knowledge", "get_ticket", "add_ticket_message"],
       });
       await loadCore();
+      notify("Agent created with a draft version.", "success");
     } catch (e) {
       setError(readError(e, "Could not create agent"));
     }
@@ -904,6 +915,7 @@ export default function AppShell() {
       });
       setDocumentForm({ title: "", source: "manual", content: "", agentId: "" });
       await loadCore();
+      notify("Knowledge added.", "success");
     } catch (e) {
       setError(readError(e, "Could not add knowledge"));
     }
@@ -923,6 +935,7 @@ export default function AppShell() {
         requiresApproval: true,
       });
       await loadCore();
+      notify("Policy created.", "success");
     } catch (e) {
       setError(readError(e, "Could not create policy"));
     }
@@ -934,6 +947,7 @@ export default function AppShell() {
         body: JSON.stringify({ enabled: !p.enabled }),
       });
       await loadCore();
+      notify(p.enabled ? "Policy disabled." : "Policy enabled.", "success");
     } catch (e) {
       setError(readError(e, "Could not update policy"));
     }
@@ -952,6 +966,7 @@ export default function AppShell() {
       });
       setEvalName("");
       await loadCore();
+      notify("Evaluation completed.", "success");
     } catch (e) {
       setError(
         readError(
@@ -973,8 +988,30 @@ export default function AppShell() {
       setNewKeySecret(k.secret);
       setNewKeyName("");
       await loadCore();
+      notify("API key created — copy it now, it is shown once.", "success");
     } catch (e) {
       setError(readError(e, "Could not create API key"));
+    }
+  }
+  async function renameKey(id: string, name: string) {
+    try {
+      await api(`/api-keys/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+      });
+      await loadCore();
+      notify(`API key renamed to “${name}”.`, "success");
+    } catch (e) {
+      setError(readError(e, "Could not rename API key"));
+    }
+  }
+  async function deleteKey(id: string) {
+    try {
+      await api(`/api-keys/${id}`, { method: "DELETE" });
+      await loadCore();
+      notify("API key deleted.", "success");
+    } catch (e) {
+      setError(readError(e, "Could not delete API key"));
     }
   }
   async function saveProfile(e: FormEvent) {
@@ -987,7 +1024,7 @@ export default function AppShell() {
       setProfile(p);
       setUser((x) => (x ? { ...x, name: p.name } : x));
       setTheme(p.theme);
-      setError("");
+      notify("Profile updated.", "success");
     } catch (e) {
       setError(readError(e, "Could not update profile"));
     }
@@ -1000,8 +1037,9 @@ export default function AppShell() {
         body: JSON.stringify(passwordForm),
       });
       setPasswordForm({ currentPassword: "", newPassword: "" });
-      setError(
+      notify(
         "Password changed. Please sign in again if your session expires.",
+        "success",
       );
     } catch (e) {
       setError(readError(e, "Could not update password"));
@@ -1015,6 +1053,7 @@ export default function AppShell() {
         body: JSON.stringify({ name: workspaceName }),
       });
       await loadCore();
+      notify("Workspace updated.", "success");
     } catch (e) {
       setError(readError(e, "Could not update workspace"));
     }
@@ -1031,6 +1070,7 @@ export default function AppShell() {
       });
       await loadProviderState();
       await loadCore();
+      notify(`Routing saved — ${runForm.provider} · ${providerModel || "default model"}.`, "success");
     } catch (e) {
       setError(readError(e, "Could not save LLM provider"));
     }
@@ -1051,6 +1091,7 @@ export default function AppShell() {
         loadWorkspaceData(),
       ]);
       setTab("Command Center");
+      notify("Workspace switched.", "success");
     } catch (e) {
       setError(readError(e, "Could not switch workspace"));
     }
@@ -1079,6 +1120,12 @@ export default function AppShell() {
       setInviteEmail("");
       setInviteRole("VIEWER");
       await loadWorkspaceData();
+      notify(
+        created.emailSent === false
+          ? `Invitation created for ${created.email} — share the link below.`
+          : `Invitation sent to ${created.email}.`,
+        "success",
+      );
     } catch (e) {
       setError(readError(e, "Could not send workspace invitation"));
     } finally {
@@ -1089,6 +1136,7 @@ export default function AppShell() {
     try {
       await api(`/workspace/invitations/${id}`, { method: "DELETE" });
       await loadWorkspaceData();
+      notify("Invitation revoked.", "success");
     } catch (e) {
       setError(readError(e, "Could not revoke invitation"));
     }
@@ -1121,6 +1169,7 @@ export default function AppShell() {
         priority: "MEDIUM",
       });
       await loadCore();
+      notify("Ticket created.", "success");
     } catch (e) {
       setError(readError(e, "Could not create ticket"));
     }
@@ -1129,6 +1178,7 @@ export default function AppShell() {
     try {
       await api(`/tickets/${t.id}/run`, { method: "POST" });
       await loadCore();
+      notify("Ticket run queued.", "success");
     } catch (e) {
       setError(readError(e, "Could not run ticket"));
     }
@@ -1141,6 +1191,7 @@ export default function AppShell() {
       });
       await loadAdmin();
       await loadCore();
+      notify(`Role updated to ${role}.`, "success");
     } catch (e) {
       setError(readError(e, "Could not change role"));
     }
@@ -1150,6 +1201,7 @@ export default function AppShell() {
       await api(`/members/${id}`, { method: "DELETE" });
       await loadAdmin();
       await loadCore();
+      notify("Member removed from the workspace.", "success");
     } catch (e) {
       setError(readError(e, "Could not remove member"));
     }
@@ -1158,6 +1210,7 @@ export default function AppShell() {
     try {
       await api(`/admin/members/${id}/revoke-sessions`, { method: "POST" });
       await loadAdmin();
+      notify("Member sessions revoked.", "success");
     } catch (e) {
       setError(readError(e, "Could not revoke member sessions"));
     }
@@ -1173,6 +1226,32 @@ export default function AppShell() {
     if (tab === "Admin" && !isSystemAdmin) setTab("Command Center");
   }, [tab, isSystemAdmin]);
 
+  const toastNode = error ? (
+    <div
+      className={`toast ${toastKind}`}
+      role="status"
+      onMouseEnter={pauseToast}
+      onMouseLeave={resumeToast}
+    >
+      <span className="toast-icon">
+        {toastKind === "success" ? (
+          <CircleCheck size={16} />
+        ) : (
+          <AlertTriangle size={16} />
+        )}
+      </span>
+      <span className="toast-msg">{error}</span>
+      <button
+        className="toast-close"
+        onClick={dismissToast}
+        aria-label="Dismiss notification"
+      >
+        <X size={14} />
+      </button>
+      <i className="toast-timer" key={toastSeq} />
+    </div>
+  ) : null;
+
   if (loading)
     return (
       <div className="boot">
@@ -1185,15 +1264,18 @@ export default function AppShell() {
     );
   if (!user)
     return (
-      <AuthScreen
-        mode={authMode}
-        setMode={setAuthMode}
-        form={authForm}
-        setForm={setAuthForm}
-        error={authError}
-        submit={auth}
-        oauth={oauth}
-      />
+      <>
+        <AuthScreen
+          mode={authMode}
+          setMode={setAuthMode}
+          form={authForm}
+          setForm={setAuthForm}
+          error={authError}
+          submit={auth}
+          oauth={oauth}
+        />
+        {toastNode}
+      </>
     );
 
   const selectedAgent = agents.find((a) => a.id === runForm.agentId);
@@ -1299,31 +1381,7 @@ export default function AppShell() {
           </div>
         </header>
         <div className="content">
-          {error && (
-            <div
-              className={`toast ${toastKind}`}
-              role="status"
-              onMouseEnter={pauseToast}
-              onMouseLeave={resumeToast}
-            >
-              <span className="toast-icon">
-                {toastKind === "success" ? (
-                  <CircleCheck size={16} />
-                ) : (
-                  <AlertTriangle size={16} />
-                )}
-              </span>
-              <span className="toast-msg">{error}</span>
-              <button
-                className="toast-close"
-                onClick={dismissToast}
-                aria-label="Dismiss notification"
-              >
-                <X size={14} />
-              </button>
-              <i className="toast-timer" key={toastSeq} />
-            </div>
-          )}
+          {toastNode}
           {tab === "Command Center" && (
             <CommandCenter
               dashboard={dashboard}
@@ -1430,6 +1488,8 @@ export default function AppShell() {
               secret={newKeySecret}
               setSecret={setNewKeySecret}
               onCreate={createKey}
+              onRename={renameKey}
+              onDelete={deleteKey}
               providerState={providerState}
             />
           )}
@@ -1521,6 +1581,7 @@ export default function AppShell() {
             <AdminView
               data={adminData}
               viewerRole={user.role}
+              providerState={providerState}
               onRefresh={loadAdmin}
               onRole={changeRole}
               onRemove={removeMember}
@@ -1785,7 +1846,7 @@ function CommandCenter({
   const providerStats = useMemo(() => {
     const counts = new Map<string, number>();
     for (const r of runs) {
-      const key = r.provider || "OLLAMA";
+      const key = r.provider || "OMNIROUTE";
       counts.set(key, (counts.get(key) || 0) + 1);
     }
     return [...counts.entries()]
@@ -1875,7 +1936,7 @@ function CommandCenter({
           <PanelHeader
             icon={LineChart}
             title="Execution pulse"
-            sub={`${dashboard?.metrics.provider || "OLLAMA"} · ${dashboard?.metrics.model || "model not selected"}`}
+            sub={`${dashboard?.metrics.provider || "OMNIROUTE"} · ${dashboard?.metrics.model || "model not selected"}`}
           />
           <SparkBars
             values={runs
@@ -1910,7 +1971,7 @@ function CommandCenter({
             </div>
             <div>
               <span>Provider</span>
-              <b>{dashboard?.metrics.provider || "OLLAMA"}</b>
+              <b>{dashboard?.metrics.provider || "OMNIROUTE"}</b>
             </div>
           </div>
         </section>
@@ -2157,17 +2218,47 @@ function RunLab({
           <div className="provider-pills">
             <button
               type="button"
-              className={form.provider === "OLLAMA" ? "active" : ""}
-              onClick={() => setForm({ ...form, provider: "OLLAMA" })}
-            >
-              Ollama
-            </button>
-            <button
-              type="button"
               className={form.provider === "OMNIROUTE" ? "active" : ""}
               onClick={() => setForm({ ...form, provider: "OMNIROUTE" })}
             >
-              OmniRoute
+              <b>OmniRoute</b>
+              <small
+                className={
+                  providerState?.providers.find(
+                    (p) => p.provider === "OMNIROUTE",
+                  )?.configured
+                    ? "good-text"
+                    : "bad-text"
+                }
+              >
+                {providerState?.providers.find(
+                  (p) => p.provider === "OMNIROUTE",
+                )?.configured
+                  ? "configured"
+                  : "unconfigured"}
+              </small>
+            </button>
+            <button
+              type="button"
+              className={form.provider === "OLLAMA" ? "active" : ""}
+              onClick={() => setForm({ ...form, provider: "OLLAMA" })}
+            >
+              <b>Ollama</b>
+              <small
+                className={
+                  providerState?.providers.find(
+                    (p) => p.provider === "OLLAMA",
+                  )?.configured
+                    ? "good-text"
+                    : "bad-text"
+                }
+              >
+                {providerState?.providers.find(
+                  (p) => p.provider === "OLLAMA",
+                )?.configured
+                  ? "configured"
+                  : "unconfigured"}
+              </small>
             </button>
           </div>
           <label>
@@ -2320,6 +2411,14 @@ function AgentsView({
   onToggle: (a: Agent) => void;
   onPublish: (a: Agent) => void;
 }) {
+  const [copiedId, setCopiedId] = useState("");
+  async function copyId(id: string) {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId((x) => (x === id ? "" : x)), 1800);
+    } catch {}
+  }
   return (
     <div className="page">
       <div className="hero compact">
@@ -2348,6 +2447,14 @@ function AgentsView({
                   </div>
                   <div>
                     <b>{a.name}</b>
+                    <button
+                      type="button"
+                      className="agent-id"
+                      title="Copy agent ID"
+                      onClick={() => copyId(a.id)}
+                    >
+                      {copiedId === a.id ? "copied ✓" : a.id}
+                    </button>
                     <span>
                       {a.project?.name || "Unassigned"} · {a._count?.runs || 0}{" "}
                       runs
@@ -3433,6 +3540,8 @@ function DeveloperView({
   secret,
   setSecret,
   onCreate,
+  onRename,
+  onDelete,
   providerState,
 }: {
   keys: ApiKey[];
@@ -3441,8 +3550,28 @@ function DeveloperView({
   secret: string;
   setSecret: (x: string) => void;
   onCreate: (e: FormEvent) => void;
+  onRename: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
   providerState: ProviderState | null;
 }) {
+  const [editingId, setEditingId] = useState("");
+  const [editName, setEditName] = useState("");
+  const [confirmId, setConfirmId] = useState("");
+  const [copiedContract, setCopiedContract] = useState(false);
+  const contract = `curl https://ryuksaidso.faizcasm.me/api/control/agents \\
+  -H "Authorization: Bearer rsk_..."
+
+curl -X POST https://ryuksaidso.faizcasm.me/api/control/runs \\
+  -H "Authorization: Bearer rsk_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"agentId":"<agent-id>","provider":"${providerState?.current || "OMNIROUTE"}","prompt":"Investigate the incident"}'`;
+  async function copyContract() {
+    try {
+      await navigator.clipboard.writeText(contract);
+      setCopiedContract(true);
+      window.setTimeout(() => setCopiedContract(false), 2000);
+    } catch {}
+  }
   return (
     <div className="page">
       <div className="hero compact">
@@ -3487,13 +3616,90 @@ function DeveloperView({
             {keys.map((k) => (
               <div className="key-row" key={k.id}>
                 <KeyRound size={16} />
-                <div>
-                  <b>{k.name}</b>
-                  <span>
-                    {k.prefix}•••• · created{" "}
-                    {new Date(k.createdAt).toLocaleString()}
-                  </span>
+                <div className="key-copy">
+                  {editingId === k.id ? (
+                    <form
+                      className="key-edit"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const trimmed = editName.trim();
+                        if (trimmed.length < 2) return;
+                        onRename(k.id, trimmed);
+                        setEditingId("");
+                      }}
+                    >
+                      <input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        minLength={2}
+                        maxLength={80}
+                        autoFocus
+                        aria-label="API key name"
+                      />
+                      <button className="primary" type="submit">
+                        Save
+                      </button>
+                      <button
+                        className="ghost"
+                        type="button"
+                        onClick={() => setEditingId("")}
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <>
+                      <b>{k.name}</b>
+                      <span>
+                        {k.prefix}•••• · created{" "}
+                        {new Date(k.createdAt).toLocaleString()}
+                      </span>
+                    </>
+                  )}
                 </div>
+                {editingId !== k.id && (
+                  <div className="key-actions">
+                    <button
+                      className="ghost-icon"
+                      title="Rename key"
+                      onClick={() => {
+                        setEditingId(k.id);
+                        setEditName(k.name);
+                        setConfirmId("");
+                      }}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    {confirmId === k.id ? (
+                      <>
+                        <button
+                          className="danger"
+                          onClick={() => {
+                            onDelete(k.id);
+                            setConfirmId("");
+                          }}
+                        >
+                          Delete
+                        </button>
+                        <button
+                          className="ghost-icon"
+                          title="Cancel"
+                          onClick={() => setConfirmId("")}
+                        >
+                          <X size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        className="ghost-icon"
+                        title="Delete key"
+                        onClick={() => setConfirmId(k.id)}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
             {!keys.length && (
@@ -3510,13 +3716,28 @@ function DeveloperView({
             title="API contract"
             sub="Session cookies or workspace bearer keys."
           />
-          <pre className="code-doc">{`curl -X POST https://ryuksaidso.faizcasm.me/api/control/runs \\
-  -H "Authorization: Bearer rsk_..." \\
-  -H "Content-Type: application/json" \\
-  -d '{\n    "agentId":"<agent-id>",\n    "provider":"${providerState?.current || "OLLAMA"}",\n    "prompt":"Investigate the incident"\n  }'`}</pre>
+          <div className="code-head">
+            <span>GET /api/control/agents · POST /api/control/runs</span>
+            <button className="ghost" onClick={copyContract}>
+              {copiedContract ? (
+                <>
+                  <CircleCheck size={14} />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy size={14} />
+                  Copy
+                </>
+              )}
+            </button>
+          </div>
+          <pre className="code-doc">{contract}</pre>
           <div className="hint">
             <Lock size={15} />
-            Tenant isolation is enforced from the key’s workspace.
+            Call <b>GET /api/control/agents</b> first to resolve an{" "}
+            <b>agentId</b>. Tenant isolation is enforced from the key’s
+            workspace.
           </div>
         </section>
       </div>
@@ -3607,6 +3828,12 @@ function SettingsView({
   const providerInfo = providerState?.providers.find(
     (p) => p.provider === provider,
   );
+  const omniInfo = providerState?.providers.find(
+    (p) => p.provider === "OMNIROUTE",
+  );
+  const ollamaInfo = providerState?.providers.find(
+    (p) => p.provider === "OLLAMA",
+  );
   const [copied, setCopied] = useState(false);
   async function copyInvite() {
     const url = inviteResult?.inviteUrl;
@@ -3687,26 +3914,6 @@ function SettingsView({
                 onChange={(e) =>
                   setProfileForm({ ...profileForm, bio: e.target.value })
                 }
-              />
-            </label>
-            <label>
-              Avatar URL
-              <input
-                value={profileForm.avatarUrl}
-                onChange={(e) =>
-                  setProfileForm({ ...profileForm, avatarUrl: e.target.value })
-                }
-                placeholder="https://…"
-              />
-            </label>
-            <label>
-              Timezone
-              <input
-                value={profileForm.timezone}
-                onChange={(e) =>
-                  setProfileForm({ ...profileForm, timezone: e.target.value })
-                }
-                placeholder="Asia/Kolkata"
               />
             </label>
             <button className="primary" type="submit">
@@ -3847,31 +4054,29 @@ function SettingsView({
             <div className="provider-pills">
               <button
                 type="button"
-                className={provider === "OLLAMA" ? "active" : ""}
-                onClick={() => {
-                  setProvider("OLLAMA");
-                  setModel(
-                    providerState?.providers.find(
-                      (p) => p.provider === "OLLAMA",
-                    )?.selectedModel || "",
-                  );
-                }}
-              >
-                Ollama
-              </button>
-              <button
-                type="button"
                 className={provider === "OMNIROUTE" ? "active" : ""}
                 onClick={() => {
                   setProvider("OMNIROUTE");
-                  setModel(
-                    providerState?.providers.find(
-                      (p) => p.provider === "OMNIROUTE",
-                    )?.selectedModel || "",
-                  );
+                  setModel(omniInfo?.selectedModel || "");
                 }}
               >
-                OmniRoute
+                <b>OmniRoute</b>
+                <small className={omniInfo?.configured ? "good-text" : "bad-text"}>
+                  {omniInfo?.configured ? "configured" : "unconfigured"}
+                </small>
+              </button>
+              <button
+                type="button"
+                className={provider === "OLLAMA" ? "active" : ""}
+                onClick={() => {
+                  setProvider("OLLAMA");
+                  setModel(ollamaInfo?.selectedModel || "");
+                }}
+              >
+                <b>Ollama</b>
+                <small className={ollamaInfo?.configured ? "good-text" : "bad-text"}>
+                  {ollamaInfo?.configured ? "configured" : "unconfigured"}
+                </small>
               </button>
             </div>
             <label>
@@ -4132,6 +4337,7 @@ function SettingsView({
 function AdminView({
   data,
   viewerRole,
+  providerState,
   onRefresh,
   onRole,
   onRemove,
@@ -4141,6 +4347,7 @@ function AdminView({
 }: {
   data: AdminOverview | null;
   viewerRole: string;
+  providerState: ProviderState | null;
   onRefresh: () => Promise<void> | void;
   onRole: (id: string, r: string) => void;
   onRemove: (id: string) => void;
@@ -4149,6 +4356,12 @@ function AdminView({
   updatedAt?: string | null;
 }) {
   const [refreshing, setRefreshing] = useState(false);
+  const omniInfo = providerState?.providers.find(
+    (p) => p.provider === "OMNIROUTE",
+  );
+  const ollamaInfo = providerState?.providers.find(
+    (p) => p.provider === "OLLAMA",
+  );
   const handleRefresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -4271,15 +4484,30 @@ function AdminView({
         <div className="security-grid">
           <div>
             <span>Active provider</span>
-            <b>{data.organization?.llmProvider || "OLLAMA"}</b>
+            <b>{data.organization?.llmProvider || "OMNIROUTE"}</b>
           </div>
           <div>
-            <span>Ollama model</span>
-            <b>{data.organization?.ollamaModel || "Not configured"}</b>
+            <span>
+              OmniRoute ·{" "}
+              {omniInfo?.configured ? "configured" : "unconfigured"}
+            </span>
+            <b>
+              {data.organization?.omnirouteModel ||
+                omniInfo?.selectedModel ||
+                "Not configured"}
+            </b>
           </div>
           <div>
-            <span>OmniRoute model</span>
-            <b>{data.organization?.omnirouteModel || "Not configured"}</b>
+            <span>
+              Ollama · {ollamaInfo?.configured ? "configured" : "unconfigured"}
+            </span>
+            <b className={ollamaInfo?.configured ? "" : "bad-text"}>
+              {ollamaInfo?.configured
+                ? data.organization?.ollamaModel ||
+                  ollamaInfo?.selectedModel ||
+                  "Not configured"
+                : "Unconfigured"}
+            </b>
           </div>
         </div>
       </div>
@@ -4446,7 +4674,7 @@ function AdminView({
                 error: data.health?.redis.error,
               },
               {
-                name: `LLM · ${data.health?.llm.provider || data.organization?.llmProvider || "OLLAMA"}`,
+                name: `LLM · ${data.health?.llm.provider || data.organization?.llmProvider || "OMNIROUTE"}`,
                 ok: data.health?.llm.ok,
                 detail: data.health
                   ? `${data.health.llm.model || "default model"} · ${data.health.llm.latencyMs} ms`

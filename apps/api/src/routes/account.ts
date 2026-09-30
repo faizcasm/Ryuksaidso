@@ -108,7 +108,7 @@ accountRouter.post('/profile/password', async (req, res, next) => {
 accountRouter.get('/llm/providers', async (req, res) => {
   const u = user(req as AuthenticatedRequest);
   const organization = await prisma.organization.findUnique({ where: { id:u.organizationId }, select: { llmProvider:true, ollamaModel:true, omnirouteModel:true } });
-  const results = await Promise.all((['OLLAMA','OMNIROUTE'] as const).map(async provider => {
+  const results = await Promise.all((['OMNIROUTE','OLLAMA'] as const).map(async provider => {
     const model = provider === 'OLLAMA' ? organization?.ollamaModel : organization?.omnirouteModel;
     try {
       const models = await getLLMProvider(provider, model || undefined).models();
@@ -118,7 +118,7 @@ accountRouter.get('/llm/providers', async (req, res) => {
       return { provider, configured: false, models: [], selectedModel: model || '', error: error instanceof Error ? error.message : String(error) };
     }
   }));
-  res.json({ current: organization?.llmProvider || 'OLLAMA', providers: results });
+  res.json({ current: organization?.llmProvider || 'OMNIROUTE', providers: results });
 });
 
 accountRouter.get('/llm', async (req, res) => {
@@ -321,6 +321,19 @@ accountRouter.post('/api-keys', async (req, res, next) => {
     const created = await prisma.apiKey.create({ data: { organizationId: u.organizationId, name, prefix, secretHash: hashSecret(secret) } });
     await audit(u, 'api_key.created', 'api_key', created.id, { name });
     res.status(201).json({ id: created.id, name: created.name, prefix: created.prefix, secret, createdAt: created.createdAt });
+  } catch (e) { next(e); }
+});
+
+accountRouter.patch('/api-keys/:id', async (req, res, next) => {
+  try {
+    const u = user(req as AuthenticatedRequest); requireRole(u, ['OWNER', 'ADMIN']);
+    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+    if (name.length < 2 || name.length > 80) return res.status(400).json({ error: 'ValidationError', message: 'API key name must be between 2 and 80 characters' });
+    const key = await prisma.apiKey.findFirst({ where: { id: req.params.id, organizationId: u.organizationId } });
+    if (!key) return res.status(404).json({ error: 'NotFound', message: 'API key not found' });
+    await prisma.apiKey.update({ where: { id: key.id }, data: { name } });
+    await audit(u, 'api_key.renamed', 'api_key', key.id, { from: key.name, to: name });
+    res.json({ id: key.id, name, prefix: key.prefix, lastUsedAt: key.lastUsedAt, createdAt: key.createdAt });
   } catch (e) { next(e); }
 });
 
