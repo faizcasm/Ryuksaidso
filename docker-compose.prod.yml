@@ -149,6 +149,8 @@ services:
 
   web:
     image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/ryuksaidso-web:${IMAGE_TAG:-latest}
+    environment:
+      HOSTNAME: "0.0.0.0"
     depends_on:
       api: { condition: service_healthy }
     healthcheck:

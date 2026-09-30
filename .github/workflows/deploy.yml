@@ -85,13 +85,19 @@ jobs:
           dc exec -T nginx nginx -s reload || true
           ok=0
           for i in $(seq 1 36); do
-            if curl $CURL_OPTS -fsS "$SCHEME://127.0.0.1/healthz" >/dev/null 2>&1 && curl $CURL_OPTS -fsS "$SCHEME://127.0.0.1/health" >/dev/null 2>&1; then
+            if curl $CURL_OPTS -fsS "$SCHEME://127.0.0.1/healthz" >/dev/null 2>&1 && curl $CURL_OPTS -fsS "$SCHEME://127.0.0.1/health" >/dev/null 2>&1 && curl $CURL_OPTS -fsS "$SCHEME://127.0.0.1/" >/dev/null 2>&1; then
               ok=1
               break
             fi
             sleep 5
           done
           if [ "$ok" = "1" ]; then
+            unhealthy="$(dc ps --format '{{.Health}}' 2>/dev/null | grep -c 'unhealthy' || true)"
+            stopped="$(dc ps --format '{{.State}}' 2>/dev/null | grep -vc 'running' || true)"
+            if [ "${unhealthy:-0}" -gt 0 ] || [ "${stopped:-0}" -gt 0 ]; then
+              echo "warning: $unhealthy unhealthy, $stopped not running" >&2
+              dc ps || true
+            fi
             echo "$IMAGE_TAG" > .last-good-tag
             echo "Deploy healthy"
             dc ps
