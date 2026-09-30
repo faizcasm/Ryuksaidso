@@ -86,7 +86,7 @@ interface AdminTabProps {
   adminOnly?: boolean;
 }
 
-export function AdminTab({ label, children, adminOnly = true }: AdminTabProps) {
+export function AdminTab({ children, adminOnly = true }: AdminTabProps) {
   const { isAdmin, isLoading } = useUserRole();
 
   if (adminOnly && (isLoading || !isAdmin)) {

@@ -188,6 +188,6 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
   }
 }
 
-export async function runSupportGraph(...args: any[]) {
+export async function runSupportGraph(..._args: any[]) {
   throw new Error('runSupportGraph is retired. Create an AgentRun and use executeAgentRun instead.');
 }
