@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildTools, calculate, knowledgeTerms, webSearchTransport } from '@ryuksaidso/agent-tools';
+import { buildTools, calculate, knowledgeTerms } from '@ryuksaidso/agent-tools';
 
 describe('calculator (safe arithmetic)', () => {
   it('evaluates expressions with precedence, powers and functions', () => {
@@ -164,29 +164,18 @@ describe('web_search (three-engine fallback)', () => {
   const html = (body: string, status = 200) => Promise.resolve(new Response(body, { status }));
   const json = (data: unknown) => Promise.resolve(new Response(JSON.stringify(data)));
   const anomaly = '<html><head><title>DuckDuckGo</title></head><body>Our systems have detected an anomaly challenge.</body></html>';
-  const bingHtml = [
-    '<ol id="b_results">',
-    '<li class="b_algo" data-id iid=SERP.1><div><h2><a href="https://www.bing.com/ck/a?!&amp;&amp;p=abc&amp;u=a1aHR0cHM6Ly9ub2RlanMub3JnL2VuL2Rvd25sb2Fk&amp;ntb=1">Download &lt;strong&gt;Node.js&lt;/strong&gt;</a></h2></div><div class="b_caption"><p>Learn more about Node.js releases &amp; schedules.</p></div></li>',
-    '<li class="b_algo" data-id iid=SERP.2><div><h2><a href="https://nodejs.org/en/about/releases/">Releases</a></h2></div><div class="b_caption"><p>LTS schedule.</p></div></li>',
-    '</ol>',
-  ].join('');
   const bingRss = [
     '<?xml version="1.0" encoding="utf-8" ?><rss version="2.0"><channel><title>Bing: node.js lts</title>',
     '<item><title>Download &lt;strong&gt;Node.js&lt;/strong&gt;</title><link>https://nodejs.org/en/download</link><description>Learn more about Node.js releases &amp; schedules.</description><pubDate>Wed, 30 Sep 2026 01:35:00 GMT</pubDate></item>',
     '<item><title>Releases</title><link>https://nodejs.org/en/about/releases/</link><description>LTS schedule.</description></item>',
     '</channel></rss>',
   ].join('');
-  const originalH2 = webSearchTransport.htmlOverH2;
-  const noH2 = async () => {
-    throw new Error('http/2 unavailable in tests');
-  };
 
-  it('serves from Bing HTML over HTTP/2 when DuckDuckGo is challenged', async () => {
-    webSearchTransport.htmlOverH2 = async () => bingHtml;
+  it('falls back to the Bing RSS feed when DuckDuckGo serves an anomaly page', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string) => {
       const u = String(url);
       if (u.includes('duckduckgo')) return html(anomaly, 202);
-      if (u.includes('format=rss')) return html('<rss/>');
+      if (u.includes('format=rss')) return html(bingRss);
       return html('');
     }));
     try {
@@ -200,36 +189,10 @@ describe('web_search (three-engine fallback)', () => {
         snippet: 'Learn more about Node.js releases & schedules.',
       });
       expect(out.results[1].url).toBe('https://nodejs.org/en/about/releases/');
-    } finally {
-      vi.unstubAllGlobals();
-      webSearchTransport.htmlOverH2 = originalH2;
-    }
-  });
-
-  it('falls back to the Bing RSS feed when HTTP/2 is unavailable', async () => {
-    webSearchTransport.htmlOverH2 = noH2;
-    vi.stubGlobal('fetch', vi.fn((url: string) => {
-      const u = String(url);
-      if (u.includes('duckduckgo')) return html(anomaly, 202);
-      if (u.includes('format=rss')) return html(bingRss);
-      return html('');
-    }));
-    try {
-      const out = await run({ query: 'node.js lts' }) as any;
-      expect(out.engine).toBe('bing');
-      expect(out.note).toContain('duckduckgo');
-      expect(out.results).toHaveLength(2);
-      expect(out.results[0].url).toBe('https://nodejs.org/en/download');
-      expect(out.results[0].snippet).toBe('Learn more about Node.js releases & schedules.');
-      expect(out.results[1].title).toBe('Releases');
-    } finally {
-      vi.unstubAllGlobals();
-      webSearchTransport.htmlOverH2 = originalH2;
-    }
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it('reaches Wikipedia as the last engine and reports what was unavailable', async () => {
-    webSearchTransport.htmlOverH2 = noH2;
     vi.stubGlobal('fetch', vi.fn((url: string) => {
       const u = String(url);
       if (u.includes('duckduckgo')) return html(anomaly, 202);
@@ -243,14 +206,10 @@ describe('web_search (three-engine fallback)', () => {
       expect(out.note).toContain('duckduckgo');
       expect(out.note).toContain('bing');
       expect(out.results[0].url).toBe('https://en.wikipedia.org/wiki/Node.js');
-    } finally {
-      vi.unstubAllGlobals();
-      webSearchTransport.htmlOverH2 = originalH2;
-    }
+    } finally { vi.unstubAllGlobals(); }
   });
 
   it('reports a soft error naming every engine when all of them fail', async () => {
-    webSearchTransport.htmlOverH2 = noH2;
     vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new Error('network down'))));
     try {
       const out = await run({ query: 'anything' }) as any;
@@ -258,9 +217,6 @@ describe('web_search (three-engine fallback)', () => {
       expect(out.error).toContain('duckduckgo');
       expect(out.error).toContain('bing');
       expect(out.error).toContain('wikipedia');
-    } finally {
-      vi.unstubAllGlobals();
-      webSearchTransport.htmlOverH2 = originalH2;
-    }
+    } finally { vi.unstubAllGlobals(); }
   });
 });

@@ -1,4 +1,3 @@
-import * as http2 from 'node:http2';
 import { USER_AGENT, httpJson, softFail } from './util';
 
 
@@ -227,26 +226,22 @@ const decodeBingUrl = (href: string): string => {
   return /^https?:\/\//i.test(value) ? value : '';
 };
 
-const parseBingHtml = (body: string): SearchHit[] => {
+async function bing(query: string, limit: number): Promise<SearchHit[]> {
+  const response = await fetch(
+    `https://www.bing.com/search?q=${encodeURIComponent(query)}&format=rss`,
+    {
+      headers: {
+        'user-agent': USER_AGENT,
+        accept: 'application/rss+xml, application/xml, text/xml, */*',
+      },
+      signal: AbortSignal.timeout(9000),
+    },
+  );
+  if (!response.ok) throw new Error(`Bing HTTP ${response.status}`);
+  const xml = await response.text();
   const hits: SearchHit[] = [];
-  for (const chunk of body.split(/<li[^>]*class="[^"]*\bb_algo\b[^"]*"/i).slice(1)) {
-    const link = /<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i.exec(chunk);
-    if (!link) continue;
-    const url = decodeBingUrl(link[1]);
-    if (!url) continue;
-    const caption = /class="[^"]*b_caption[^"]*"[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i.exec(chunk);
-    hits.push({
-      title: TAGS(decodeEntities(link[2])),
-      url,
-      snippet: TAGS(decodeEntities(caption?.[1] ?? '')),
-    });
-  }
-  return hits;
-};
-
-const parseBingRss = (body: string): SearchHit[] => {
-  const hits: SearchHit[] = [];
-  for (const chunk of body.split('<item>').slice(1)) {
+  for (const chunk of xml.split('<item>').slice(1)) {
+    if (hits.length >= limit) break;
     const title = /<title>([\s\S]*?)<\/title>/.exec(chunk);
     const link = /<link>([\s\S]*?)<\/link>/.exec(chunk);
     if (!title || !link) continue;
@@ -259,80 +254,8 @@ const parseBingRss = (body: string): SearchHit[] => {
       snippet: TAGS(decodeEntities(description?.[1] ?? '')),
     });
   }
+  if (!hits.length) throw new Error('Bing returned no parseable results');
   return hits;
-};
-
-const fetchHtmlOverHttp2 = (target: string): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const endpoint = new URL(target);
-    const session = http2.connect('https://www.bing.com');
-    let body = '';
-    let settled = false;
-    const finish = (error?: Error) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      session.destroy();
-      if (error) reject(error);
-      else resolve(body);
-    };
-    const timer = setTimeout(() => finish(new Error('Bing HTTP/2 timed out')), 9000);
-    const request = session.request({
-      ':method': 'GET',
-      ':path': `${endpoint.pathname}${endpoint.search}`,
-      'user-agent': USER_AGENT,
-      accept: 'text/html,application/xhtml+xml',
-      'accept-language': 'en-US,en;q=0.9',
-    });
-    request.setEncoding('utf8');
-    request.on('response', (headers) => {
-      const status = Number(headers[':status'] ?? 0);
-      if (status !== 200) finish(new Error(`Bing HTTP/2 ${status}`));
-    });
-    request.on('data', (chunk: string) => {
-      body += chunk;
-    });
-    request.on('end', () => finish());
-    request.on('error', (error) => finish(error as Error));
-    session.on('error', (error) => finish(error as Error));
-    request.end();
-  });
-
-export const webSearchTransport = {
-  htmlOverH2: (target: string) => fetchHtmlOverHttp2(target),
-  fetch: (target: string, init?: RequestInit) => fetch(target, init),
-};
-
-async function bing(query: string, limit: number): Promise<SearchHit[]> {
-  const target = `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
-  const attempts: Array<[string, () => Promise<SearchHit[]>]> = [
-    ['html', async () => parseBingHtml(await webSearchTransport.htmlOverH2(target))],
-    [
-      'rss',
-      async () => {
-        const response = await webSearchTransport.fetch(`${target}&format=rss`, {
-          headers: {
-            'user-agent': USER_AGENT,
-            accept: 'application/rss+xml, application/xml, text/xml, */*',
-          },
-          signal: AbortSignal.timeout(9000),
-        });
-        if (!response.ok) throw new Error(`Bing HTTP ${response.status}`);
-        return parseBingRss(await response.text());
-      },
-    ],
-  ];
-  const failures: string[] = [];
-  for (const [label, attempt] of attempts) {
-    try {
-      const hits = await attempt();
-      if (hits.length) return hits.slice(0, limit);
-      failures.push(`${label}: no parseable results`);
-    } catch (error) {
-      failures.push(`${label}: ${(error as Error).message}`);
-    }
-  }
-  throw new Error(`Bing ${failures.join('; ')}`);
 }
 
 export const webSearchTool = {
