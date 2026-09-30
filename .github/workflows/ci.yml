@@ -1,11 +1,27 @@
 name: CI
+
 on:
   push:
     branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/ci
+
 jobs:
-  validate:
+  quality:
+    name: Lint, typecheck, test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -17,6 +33,102 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
+      - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+
+  build:
+    name: Build all workspaces
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
       - run: pnpm build
+
+  compose-config:
+    name: Validate compose files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      POSTGRES_PASSWORD: ci-postgres-password
+      JWT_SECRET: ci-jwt-secret-ci-jwt-secret-ci-jwt-secret-ci
+      CORS_ORIGIN: https://example.com
+      FRONTEND_URL: https://example.com
+      DOCKERHUB_USERNAME: ci
+      GRAFANA_ADMIN_PASSWORD: ci-grafana-password
+      DOMAIN: example.com
+      CERT_NAME: example.com
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker-compose.prod.yml
+        run: docker compose -f docker-compose.prod.yml config -q
+      - name: docker-compose.tls.yml
+        run: docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml config -q
+      - name: docker-compose.yml
+        run: docker compose config -q
+
+  nginx-config:
+    name: Validate reverse proxy config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: nginx -t (HTTP)
+        run: |
+          docker run --rm \
+            --add-host api:127.0.0.1 \
+            --add-host web:127.0.0.1 \
+            -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$PWD/infra/nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:1.27-alpine nginx -t
+      - name: nginx -t (TLS template rendered)
+        run: |
+          mkdir -p "$RUNNER_TEMP/tls" "$RUNNER_TEMP/certs"
+          DOMAIN=example.com CERT_NAME=example.com \
+            envsubst "\${DOMAIN} \${CERT_NAME}" < infra/nginx/conf.d/tls.conf.template > "$RUNNER_TEMP/tls/tls.conf"
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout "$RUNNER_TEMP/certs/privkey.pem" \
+            -out "$RUNNER_TEMP/certs/fullchain.pem" -days 1 -subj "/CN=example.com" 2>/dev/null
+          docker run --rm \
+            --add-host api:127.0.0.1 \
+            --add-host web:127.0.0.1 \
+            -v "$PWD/infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$RUNNER_TEMP/tls/tls.conf:/etc/nginx/conf.d/tls.conf:ro" \
+            -v "$RUNNER_TEMP/certs:/etc/letsencrypt/live/example.com:ro" \
+            nginx:1.27-alpine nginx -t
+
+  docker:
+    name: Build container images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            file: apps/api/Dockerfile
+          - image: web
+            file: apps/web/Dockerfile
+          - image: worker
+            file: apps/worker/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          push: false
+          tags: ryuksaidso/${{ matrix.image }}:ci
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api' }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max

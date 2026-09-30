@@ -1,0 +1,18 @@
+services:
+  nginx:
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN}
+      CERT_NAME: ${CERT_NAME:?Set CERT_NAME}
+    volumes:
+      - ./infra/nginx/conf.d/tls-redirect.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./infra/nginx/conf.d/tls.conf.template:/etc/nginx/templates/tls.conf.template:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+
+  certbot:
+    image: certbot/certbot
+    profiles: ["tls"]
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-certs:/etc/letsencrypt
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot; sleep 12h & wait $!; done;"

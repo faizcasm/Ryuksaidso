@@ -11,8 +11,12 @@ FROM base AS deps
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/web/package.json ./apps/web/package.json
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/worker/package.json ./apps/worker/package.json
+COPY packages/agent-tools/package.json ./packages/agent-tools/package.json
+COPY packages/agent-runtime/package.json ./packages/agent-runtime/package.json
 
-RUN pnpm install --no-frozen-lockfile --filter @ryuksaidso/web...
+RUN pnpm install --frozen-lockfile --filter @ryuksaidso/web...
 
 
 

@@ -1,12 +1,13 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 RUN corepack enable
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY apps/worker/package.json apps/worker/package.json
 COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
 COPY packages/agent-runtime/package.json packages/agent-runtime/package.json
 COPY packages/agent-tools/package.json packages/agent-tools/package.json
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile --filter @ryuksaidso/worker... --filter @ryuksaidso/api
 COPY apps/worker apps/worker
 COPY apps/api/prisma apps/api/prisma
 COPY packages/agent-runtime packages/agent-runtime

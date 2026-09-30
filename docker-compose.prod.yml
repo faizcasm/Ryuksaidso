@@ -1,0 +1,212 @@
+name: ryuksaidso
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  APP_NAME: ${APP_NAME:-ryuksaidso}
+  DATABASE_URL: postgresql://${POSTGRES_USER:-ryuksaidso}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ryuksaidso}
+  REDIS_URL: redis://redis:6379
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in your environment}
+  CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN}
+  FRONTEND_URL: ${FRONTEND_URL:?Set FRONTEND_URL}
+  API_PORT: 4001
+  OMNIROUTE_URL: ${OMNIROUTE_URL:-http://host.docker.internal:20129/v1}
+  OMNIROUTE_API: ${OMNIROUTE_API:-}
+  OMNIROUTE_MODEL: ${OMNIROUTE_MODEL:-}
+  OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11435/v1}
+  OLLAMA_API: ${OLLAMA_API:-ollama}
+  OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b-instruct-q4_K_M}
+  DOCKER_RUNTIME: "true"
+  COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+  GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+  GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+  GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-}
+  GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+  MCP_SERVERS: ${MCP_SERVERS:-}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_SECURE: ${SMTP_SECURE:-false}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  EMAIL_FROM: ${EMAIL_FROM:-}
+  SYSTEM_ADMIN_EMAILS: ${SYSTEM_ADMIN_EMAILS:-}
+  RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-600}
+  RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/conf.d/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-certs:/etc/letsencrypt:ro
+    depends_on:
+      api: { condition: service_healthy }
+      web: { condition: service_started }
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ryuksaidso}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ryuksaidso}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  llm-proxy:
+    image: node:22-alpine
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      PROXY_MAP: ${LLM_PROXY_MAP:-11435:11434,20129:20128}
+      PROXY_BIND: "172.17.0.1,0.0.0.0"
+      PROXY_TARGET_HOST: "127.0.0.1"
+    volumes:
+      - ./infra/llm-proxy.js:/app/llm-proxy.js:ro
+    command: ["node", "/app/llm-proxy.js"]
+
+  migrate:
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/ryuksaidso-api:${IMAGE_TAG:-latest}
+    command: ["sh", "-c", "for i in $(seq 1 30); do ./node_modules/.bin/prisma migrate deploy && exit 0; echo 'waiting for postgres...'; sleep 2; done; exit 1"]
+    environment:
+      <<: *api-environment
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: "no"
+
+  api:
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/ryuksaidso-api:${IMAGE_TAG:-latest}
+    environment:
+      <<: *api-environment
+    deploy:
+      replicas: ${API_REPLICAS:-2}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4001/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      llm-proxy: { condition: service_started }
+    restart: unless-stopped
+
+  worker:
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/ryuksaidso-worker:${IMAGE_TAG:-latest}
+    environment:
+      <<: *api-environment
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      llm-proxy: { condition: service_started }
+    restart: unless-stopped
+
+  web:
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/ryuksaidso-web:${IMAGE_TAG:-latest}
+    depends_on:
+      api: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: ["observability"]
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on: [api]
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.5.5
+    profiles: ["observability"]
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./infra/loki/config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:3.5.5
+    profiles: ["observability"]
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./infra/promtail/config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    profiles: ["observability"]
+    ports:
+      - "127.0.0.1:3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on: [prometheus, loki]
+    restart: unless-stopped
+
+volumes:
+  postgres_data: {}
+  redis_data: {}
+  grafana_data: {}
+  loki_data: {}
+  prometheus_data: {}
+  certbot-www: {}
+  certbot-certs: {}

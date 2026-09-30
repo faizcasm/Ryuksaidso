@@ -1,0 +1,82 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [Docker]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag to deploy (sha-<full commit>, version, or latest)
+        required: true
+        default: latest
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  deploy:
+    name: Deploy to AWS EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    env:
+      DEPLOY_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || format('sha-{0}', github.event.workflow_run.head_sha) }}
+      EC2_HOST: ${{ secrets.EC2_HOST }}
+      EC2_USER: ${{ secrets.EC2_USER }}
+      EC2_PORT: ${{ secrets.EC2_PORT }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf 'Host *\n  StrictHostKeyChecking accept-new\n  UserKnownHostsFile ~/.ssh/known_hosts\n  ConnectTimeout 15\n' > ~/.ssh/config
+          ssh-keyscan -p "${EC2_PORT:-22}" "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: Sync release files to the instance
+        run: |
+          ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" 'mkdir -p /opt/ryuksaidso'
+          tar czf - docker-compose.prod.yml docker-compose.tls.yml infra | \
+            ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" 'tar xzf - -C /opt/ryuksaidso'
+      - name: Pull, restart and health gate
+        run: |
+          ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" "bash -s -- '$DEPLOY_TAG'" <<'REMOTE'
+          set -euo pipefail
+          DEPLOY_TAG="$1"
+          cd /opt/ryuksaidso
+          export IMAGE_TAG="$DEPLOY_TAG"
+          PREV_TAG="$(cat .last-good-tag 2>/dev/null || true)"
+          echo "Deploying image tag: $IMAGE_TAG (previous good: ${PREV_TAG:-none})"
+          docker compose -f docker-compose.prod.yml pull migrate api worker web
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          docker compose -f docker-compose.prod.yml exec -T nginx nginx -s reload || true
+          ok=0
+          for i in $(seq 1 36); do
+            if curl -fsS http://127.0.0.1/healthz >/dev/null 2>&1 && curl -fsS http://127.0.0.1/health >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ok" = "1" ]; then
+            echo "$IMAGE_TAG" > .last-good-tag
+            echo "Deploy healthy"
+            docker compose -f docker-compose.prod.yml ps
+            exit 0
+          fi
+          echo "Health gate failed, collecting logs"
+          docker compose -f docker-compose.prod.yml logs --tail=200 || true
+          if [ -n "${PREV_TAG:-}" ]; then
+            echo "Rolling back to $PREV_TAG"
+            export IMAGE_TAG="$PREV_TAG"
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          fi
+          exit 1
+          REMOTE
