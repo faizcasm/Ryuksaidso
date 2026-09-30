@@ -10,13 +10,6 @@ interface AdminGuardProps {
   showMessage?: boolean;
 }
 
-/**
- * Component that shows children only if user is ADMIN
- * Usage: 
- * <AdminGuard>
- *   <AdminOnlyFeature />
- * </AdminGuard>
- */
 export function AdminGuard({ children, fallback, showMessage = false }: AdminGuardProps) {
   const { isAdmin, isLoading } = useUserRole();
 
@@ -62,17 +55,10 @@ interface AdminMenuItemProps {
   title?: string;
 }
 
-/**
- * Menu item that shows only to admins
- * Usage:
- * <AdminMenuItem onClick={handleAdminAction}>
- *   Admin Settings
- * </AdminMenuItem>
- */
-export function AdminMenuItem({ 
-  children, 
-  onClick, 
-  className = '', 
+export function AdminMenuItem({
+  children,
+  onClick,
+  className = '',
   disabled = false,
   title = 'Admin only'
 }: AdminMenuItemProps) {
@@ -100,15 +86,6 @@ interface AdminTabProps {
   adminOnly?: boolean;
 }
 
-/**
- * Tab that shows only to admins
- * Usage:
- * <Tabs>
- *   <AdminTab label="Settings" adminOnly>
- *     <AdminSettings />
- *   </AdminTab>
- * </Tabs>
- */
 export function AdminTab({ label, children, adminOnly = true }: AdminTabProps) {
   const { isAdmin, isLoading } = useUserRole();
 
@@ -118,7 +95,7 @@ export function AdminTab({ label, children, adminOnly = true }: AdminTabProps) {
 
   return (
     <>
-      {/* Label rendered by parent Tabs component */}
+      {}
       {children}
     </>
   );
@@ -130,17 +107,10 @@ interface RoleBasedVisibilityProps {
   fallback?: ReactNode;
 }
 
-/**
- * Generic role-based visibility component
- * Usage:
- * <RoleBasedVisibility allowedRoles={['ADMIN']}>
- *   <AdminPanel />
- * </RoleBasedVisibility>
- */
-export function RoleBasedVisibility({ 
-  children, 
-  allowedRoles, 
-  fallback 
+export function RoleBasedVisibility({
+  children,
+  allowedRoles,
+  fallback
 }: RoleBasedVisibilityProps) {
   const { user, isLoading } = useUserRole();
 
@@ -160,11 +130,6 @@ interface AdminBadgeProps {
   showLabel?: boolean;
 }
 
-/**
- * Badge to display user's admin status
- * Usage:
- * <AdminBadge userRole={user.userRole} showLabel />
- */
 export function AdminBadge({ userRole, showLabel = true }: AdminBadgeProps) {
   const isAdminUser = userRole === 'ADMIN';
 
@@ -197,11 +162,8 @@ interface AdminWarningProps {
   message?: string;
 }
 
-/**
- * Warning message shown to non-admin users trying to access admin features
- */
-export function AdminWarning({ 
-  message = 'This feature is only available to administrators.' 
+export function AdminWarning({
+  message = 'This feature is only available to administrators.'
 }: AdminWarningProps) {
   const { isAdmin, isLoading } = useUserRole();
 

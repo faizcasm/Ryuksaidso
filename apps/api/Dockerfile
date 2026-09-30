@@ -18,7 +18,6 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/prisma ./apps/api/prisma
-# whole package (dist + its own node_modules for the MCP SDK / playwright)
 COPY --from=build /app/packages/agent-tools ./packages/agent-tools
 COPY package.json pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json

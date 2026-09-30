@@ -1,26 +1,4 @@
 #!/usr/bin/env node
-/**
- * llm-proxy — bridges the Docker bridge network to services that only listen on
- * the host loopback interface.
- *
- * Ollama binds 127.0.0.1:11434 (see OLLAMA_HOST in its systemd unit), and a
- * container cannot reach the host's loopback at all: `host.docker.internal`
- * resolves to the docker0 gateway (172.17.0.1), where nothing is listening —
- * every call dies with ECONNREFUSED and /ready reports the LLM as down.
- *
- * This proxy runs with `network_mode: host` in docker-compose.yml, so it shares
- * the host's network namespace: it can dial 127.0.0.1 while binding on the
- * bridge address that containers route to.
- *
- *   PROXY_MAP          "11435:11434,20129:20128"   listenPort:targetPort pairs
- *   PROXY_BIND         "172.17.0.1,0.0.0.0"        bind addresses, tried in order
- *   PROXY_TARGET_HOST  "127.0.0.1"                 where the real service lives
- *
- * Binding docker0 (172.17.0.1) keeps the forwarded ports off the LAN; the
- * 0.0.0.0 entry is only a fallback for hosts where docker0 is elsewhere.
- * The proxy is harmless if the real service later starts listening on 0.0.0.0
- * itself — it keeps working on its own port, and nothing conflicts.
- */
 const net = require('net');
 
 const TARGET_HOST = process.env.PROXY_TARGET_HOST || '127.0.0.1';
@@ -42,7 +20,6 @@ const PAIRS = (process.env.PROXY_MAP || '11435:11434,20129:20128')
     return { listen, target };
   });
 
-/** Wire two sockets together and make sure neither outlives the other. */
 function bridge(client, targetPort) {
   const upstream = net.connect({ host: TARGET_HOST, port: targetPort });
   const teardown = cause => {
@@ -61,7 +38,6 @@ function bridge(client, targetPort) {
   client.once('close', () => teardown('client closed'));
 }
 
-/** Listen on the first bind address that works. */
 function serve({ listen, target }) {
   let index = 0;
 

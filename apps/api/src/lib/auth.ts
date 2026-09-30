@@ -28,13 +28,11 @@ export function clearAuthCookies(res: { clearCookie: Function }) {
   const base = { secure: config.NODE_ENV === 'production', sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none' } as const;
   res.clearCookie(ACCESS_COOKIE, { ...base, httpOnly: true, path: '/' });
   res.clearCookie(REFRESH_COOKIE, { ...base, httpOnly: true, path: '/api' });
-  // Clear the pre-fix path too so old browser sessions do not leave a second refresh cookie behind.
   res.clearCookie(REFRESH_COOKIE, { ...base, httpOnly: true, path: '/api/auth' });
   res.clearCookie(CSRF_COOKIE, { ...base, httpOnly: false, path: '/' });
 }
 
 export function setSessionCookies(res: { cookie: Function; clearCookie: Function }, accessToken: string, refreshToken: string) {
-  // Remove any pre-2.0 refresh cookie scoped to /api/auth before issuing the broader /api cookie.
   const base = { secure: config.NODE_ENV === 'production', sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none', httpOnly: true } as const;
   res.clearCookie(REFRESH_COOKIE, { ...base, path: '/api/auth' });
   res.cookie(ACCESS_COOKIE, accessToken, { ...base, path: '/', maxAge: 15 * 60 * 1000 });
@@ -57,18 +55,6 @@ export async function hashPassword(password: string) { return bcrypt.hash(passwo
 function hashToken(token: string) { return crypto.createHash('sha256').update(token).digest('hex'); }
 function randomToken() { return crypto.randomBytes(48).toString('base64url'); }
 
-/**
- * Resolve the system RBAC role (User.userRole: ADMIN | USER) for a session subject.
- *
- * Two independent layers exist and must not be confused:
- *  - system role  → User.userRole, gates platform routes (requireAdmin) and the Admin tab;
- *  - workspace role → Membership.role (OWNER/ADMIN/AGENT/VIEWER), gates invites and members.
- *
- * SYSTEM_ADMIN_EMAILS is the bootstrap allowlist: listed emails are promoted to
- * ADMIN here (sign-in, refresh, workspace switch, /me). Everything else is read
- * from the database, so explicit grants/demotions via PATCH /admin/users/:id/role
- * stay authoritative — the allowlist only promotes, it never demotes.
- */
 export async function resolveSystemRole(user: Pick<AuthUser, 'id' | 'email' | 'userRole'>): Promise<string> {
   const email = (user.email || '').toLowerCase();
   if (config.SYSTEM_ADMIN_EMAILS.includes(email)) {
@@ -84,7 +70,6 @@ export async function resolveSystemRole(user: Pick<AuthUser, 'id' | 'email' | 'u
 export async function createSession(user: AuthUser) {
   const refreshToken = randomToken();
   const expiresAt = new Date(Date.now() + config.REFRESH_TOKEN_TTL_MS);
-  // The access token carries the system role so /me and the UI can gate on it.
   const subject: AuthUser = { ...user, userRole: await resolveSystemRole(user) };
   await prisma.session.create({ data: { userId: user.id, organizationId: user.organizationId, tokenHash: hashToken(refreshToken), expiresAt } });
   return { accessToken: signToken(subject), refreshToken, expiresAt, user: subject };
@@ -106,7 +91,6 @@ export async function rotateSession(refreshToken: string): Promise<{ user: AuthU
     return token;
   });
   if (!next) return null;
-  // Re-resolve on refresh so allowlist changes propagate without a fresh login.
   user.userRole = await resolveSystemRole(user);
   return { user, accessToken: signToken(user), refreshToken: next };
 }

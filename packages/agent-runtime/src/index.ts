@@ -41,12 +41,9 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
 
   await deps.prisma.agentRun.update({ where: { id: runId }, data: { status: 'RUNNING', startedAt: new Date(), error: null } });
 
-  // Get effective agent configuration: use version config if available and valid, otherwise fall back to current agent
   const getEffectiveAgentConfig = () => {
-    // If we have a version with config, use it
     if (run.agentVersion && typeof run.agentVersion.config === 'object' && run.agentVersion.config !== null) {
       const config = run.agentVersion.config as any;
-      // Check if it has the required fields
       if (typeof config.instructions === 'string' && Array.isArray(config.tools)) {
         return {
           instructions: config.instructions,
@@ -55,7 +52,6 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
         };
       }
     }
-    // Fall back to current agent
     return {
       instructions: run.agent.instructions,
       tools: run.agent.tools,
@@ -96,7 +92,6 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
     if (!prompt) throw new Error('Run input must include a prompt');
 
     const { instructions, tools: agentTools, systemPrompt } = getEffectiveAgentConfig();
-    // Custom system prompt (set on the agent) overrides the instructions in every LLM stage.
     const persona = typeof systemPrompt === 'string' && systemPrompt.trim() ? systemPrompt : instructions;
     const configuredTools = Array.isArray(agentTools) ? agentTools.map(String) : Object.keys(deps.tools);
     const toolCatalog = configuredTools.filter((name: string) => deps.tools[name]).map((name: string) => {
@@ -118,9 +113,6 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
 
     const toolResults: Array<{ tool: string; status: string; result?: unknown; approvalId?: string }> = [];
     const requestedCalls: any[] = Array.isArray((planner as any).toolCalls) ? (planner as any).toolCalls.slice(0, 6) : [];
-    // Ticket runs always read before they write, and the reply tool is always
-    // planned — so the human-approval gate and its continuation run are
-    // exercised deterministically instead of depending on model mood.
     const orderedCalls = [
       ...requestedCalls.filter(c => String(c?.tool ?? '') !== 'add_ticket_message'),
       ...requestedCalls.filter(c => String(c?.tool ?? '') === 'add_ticket_message')
@@ -152,8 +144,6 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
         return { runId, status: 'WAITING_APPROVAL', approvalId };
       }
 
-      // The reply text is drafted here (not by the planner) so a ticket always
-      // gets a real answer instead of echoing its own prompt back.
       if (toolName === 'add_ticket_message' && !input.content) {
         const prior = toolResults.find(r => r.tool === 'get_ticket' && r.status === 'COMPLETED');
         const draft = await step('Ticket Reply', 'Draft customer response', { ticketId: payload.ticketId }, async () => {

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { 
-  Layers3, Database, Cpu, Zap, GitBranch, Shield, BarChart3, 
+import {
+  Layers3, Database, Cpu, Zap, GitBranch, Shield, BarChart3,
   Home, ChevronDown, X, Copy, Check, ExternalLink, Settings,
   Play, Pause, RotateCcw
 } from "lucide-react";
@@ -110,7 +110,6 @@ export default function ArchitecturePage() {
   const animationRef = useRef<number | null>(null);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
 
-  // 3D Canvas Animation
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -123,11 +122,9 @@ export default function ArchitecturePage() {
         rotationRef.current += rotationSpeed * 0.01;
       }
 
-      // Clear canvas
       ctx.fillStyle = "rgba(8, 10, 15, 0.9)";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw grid
       ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
       ctx.lineWidth = 1;
       for (let i = 0; i < canvas.width; i += 40) {
@@ -147,7 +144,6 @@ export default function ArchitecturePage() {
       const centerY = canvas.height / 2;
       const scale = 60;
 
-      // Draw connections
       dataFlows.forEach((flow) => {
         const fromComp = components.find((c) => c.id === flow.from);
         const toComp = components.find((c) => c.id === flow.to);
@@ -184,7 +180,6 @@ export default function ArchitecturePage() {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Draw label
         const midX = (fromX + toX) / 2;
         const midY = (fromY + toY) / 2;
         ctx.fillStyle = flow.color;
@@ -193,7 +188,6 @@ export default function ArchitecturePage() {
         ctx.fillText(flow.label, midX, midY - 5);
       });
 
-      // Draw components
       components.forEach((comp) => {
         const x =
           centerX +
@@ -209,20 +203,17 @@ export default function ArchitecturePage() {
         const isSelected = selectedComponent === comp.id;
         const size = isSelected ? 50 : 40;
 
-        // Draw shadow
         ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
         ctx.beginPath();
         ctx.ellipse(x + 2, y + 2, size, size * 0.6, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Draw component box
         ctx.fillStyle = comp.color + (isSelected ? "cc" : "88");
         ctx.strokeStyle = comp.color;
         ctx.lineWidth = isSelected ? 2.5 : 1.5;
         ctx.fillRect(x - size, y - size * 0.6, size * 2, size * 1.2);
         ctx.strokeRect(x - size, y - size * 0.6, size * 2, size * 1.2);
 
-        // Draw glow effect for selected
         if (isSelected) {
           ctx.strokeStyle = comp.color + "44";
           ctx.lineWidth = 1;
@@ -238,7 +229,6 @@ export default function ArchitecturePage() {
           ctx.globalAlpha = 1;
         }
 
-        // Draw text
         ctx.fillStyle = "#fff";
         ctx.font = "bold 11px inter";
         ctx.textAlign = "center";

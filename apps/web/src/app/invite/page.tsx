@@ -5,15 +5,6 @@ import { api } from '../../lib/api';
 
 const TOKEN_KEY = 'ryuksaidso_invite_token';
 
-/**
- * /invite?token=… — entry point for the emailed invitation link.
- *
- * - Signed out: the token is parked in localStorage so the join completes
- *   automatically after sign-in or account creation (AppShell consumes it).
- * - Signed in: the invitation is accepted immediately; if it can never succeed
- *   (expired / revoked / wrong mailbox) the stored token is dropped so later
- *   sign-ins are not blocked by it.
- */
 export default function InvitePage() {
   const [message, setMessage] = useState('Preparing invitation…');
   const [signedInAs, setSignedInAs] = useState('');
@@ -50,7 +41,7 @@ export default function InvitePage() {
       } catch (e) {
         const status = (e as { status?: number })?.status;
         if (status === 400 || status === 403 || status === 404) {
-          localStorage.removeItem(TOKEN_KEY); // this token can never succeed
+          localStorage.removeItem(TOKEN_KEY);
         }
         if (status === 403) {
           setCanSignOut(true);
@@ -74,7 +65,6 @@ export default function InvitePage() {
     try {
       await api('/auth/logout', { method: 'POST' });
     } catch {
-      /* cookies may already be gone */
     }
     localStorage.removeItem(TOKEN_KEY);
     window.location.replace('/auth');

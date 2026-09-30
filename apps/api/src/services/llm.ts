@@ -5,21 +5,13 @@ export interface LLMProvider { chat(messages: ChatMessage[], json?: boolean): Pr
 
 type ModelPayload = { data?: Array<{ id?: string }> };
 
-/**
- * The provider could not be used at all (unreachable, no model configured).
- * Safe to fall back to the next provider — unlike HTTP-level inference errors.
- */
 export class ProviderUnavailableError extends Error {
   constructor(message: string) { super(message); this.name = 'ProviderUnavailableError'; }
 }
 
-/**
- * A configured model is available when it is listed exactly, or when discovered ids
- * are routed variants of it (e.g. "auto" -> "auto/chat", "auto/coding:fast").
- */
 export function isModelAvailable(models: string[], model: string): boolean {
   if (!model) return false;
-  if (!models.length) return true; // discovery returned nothing -> do not block on it
+  if (!models.length) return true;
   if (models.includes(model)) return true;
   return models.some(id => id.startsWith(`${model}/`) || id.startsWith(`${model}:`) || id.startsWith(`${model}.`));
 }
@@ -29,8 +21,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
   private settings() {
     const base = providerConfig(this.provider);
-    // An explicit '' override means "this provider has no model" (fallback
-    // candidates pass '' to skip); only undefined falls back to the env config.
     return { ...base, model: this.modelOverride !== undefined ? this.modelOverride : base.model };
   }
 
@@ -45,7 +35,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
       signal: AbortSignal.timeout(120_000)
     });
 
-    // Retry transient network failures (connection refused / DNS / timeout) up to 3 times.
     let response: Response | undefined;
     let lastError: unknown;
     for (let attempt = 1; attempt <= 3; attempt++) {
@@ -112,12 +101,6 @@ export function getLLMProvider(provider: LLMProviderName, modelOverride?: string
   return new OpenAICompatibleProvider(provider, modelOverride);
 }
 
-/**
- * Tries providers in order (OmniRoute first, Ollama as fallback). Falls through
- * only when a provider is unusable (unreachable / no model) — HTTP-level
- * inference errors are surfaced instead of silently re-running the prompt
- * elsewhere. Mirrors the worker's chatWithFallback behaviour.
- */
 export class FallbackLLMProvider implements LLMProvider {
   lastProvider?: LLMProviderName;
   private readonly resolveModel: (provider: LLMProviderName) => string | undefined;
@@ -146,10 +129,6 @@ export class FallbackLLMProvider implements LLMProvider {
   }
 }
 
-/**
- * Preferred entry point for API-side inference (evaluations, background jobs):
- * OmniRoute first, then Ollama.
- */
 export function getResilientProvider(order: LLMProviderName[] = ['OMNIROUTE', 'OLLAMA'], resolveModel?: (provider: LLMProviderName) => string | undefined) {
   return new FallbackLLMProvider(order, resolveModel);
 }

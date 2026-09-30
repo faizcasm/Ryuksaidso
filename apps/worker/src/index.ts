@@ -11,7 +11,6 @@ const prisma = new PrismaClient();
 
 type ChatMessage = { role: 'system'|'user'|'assistant'; content: string };
 
-/** Error that indicates the provider could not be reached at all (DNS/connect/timeout). */
 class LLMConnectionError extends Error {
   readonly isConnection = true;
   constructor(message: string) { super(message); this.name = 'LLMConnectionError'; }
@@ -23,7 +22,6 @@ const loggedSettings = new Set<string>();
 function providerSettings(provider: 'OLLAMA'|'OMNIROUTE', model?: string) {
   const isDocker = process.env.DOCKER_RUNTIME === 'true';
 
-  // Get base URLs from environment (strip optional /v1 suffix, we re-append it below)
   let ollamaBase = (process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/v1\/?$/, '');
   let omnirouteBase = (process.env.OMNIROUTE_URL || 'http://localhost:20128').replace(/\/v1\/?$/, '');
 
@@ -41,7 +39,6 @@ function providerSettings(provider: 'OLLAMA'|'OMNIROUTE', model?: string) {
     defaultModel = process.env.OLLAMA_MODEL || 'qwen2.5-coder:3b-instruct-q4_K_M';
   }
 
-  // Inside Docker, localhost refers to the container itself -> use the host gateway
   if (isDocker) {
     try {
       const url = new URL(baseUrl);
@@ -66,13 +63,11 @@ function providerSettings(provider: 'OLLAMA'|'OMNIROUTE', model?: string) {
   return settings;
 }
 
-/** True when a provider is configured enough to be worth trying as a fallback. */
 function isProviderConfigured(provider: 'OLLAMA'|'OMNIROUTE') {
   if (provider === 'OMNIROUTE') return Boolean(process.env.OMNIROUTE_URL || process.env.OMNIROUTE_MODEL);
   return Boolean(process.env.OLLAMA_URL || process.env.OLLAMA_MODEL);
 }
 
-/** Single provider attempt. Throws LLMConnectionError when the host is unreachable. */
 async function callProvider(provider: 'OLLAMA'|'OMNIROUTE', model: string | undefined, messages: ChatMessage[], json: boolean) {
   const { baseUrl, apiKey, model: resolvedModel } = providerSettings(provider, model);
   if (!resolvedModel) throw new Error(`${provider} model is not configured. Set ${provider}_MODEL.`);
@@ -95,7 +90,6 @@ async function callProvider(provider: 'OLLAMA'|'OMNIROUTE', model: string | unde
   }
 
   if (!response.ok && json && (response.status === 400 || response.status === 422)) {
-    // Provider rejected JSON mode -> retry once without it
     try {
       response = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
@@ -120,11 +114,6 @@ async function callProvider(provider: 'OLLAMA'|'OMNIROUTE', model: string | unde
   return { content, tokens: data.usage?.total_tokens || 0 };
 }
 
-/**
- * Chat with retries and automatic fallback:
- *  1. retry the primary provider up to 3 times on connection errors (backoff)
- *  2. if still unreachable, try the other configured provider
- */
 async function chatWithFallback(primary: 'OLLAMA'|'OMNIROUTE', model: string | undefined, messages: ChatMessage[], json: boolean) {
   const attemptOrder: Array<'OLLAMA'|'OMNIROUTE'> = [primary, primary === 'OLLAMA' ? 'OMNIROUTE' : 'OLLAMA'];
   const errors: string[] = [];
@@ -142,7 +131,7 @@ async function chatWithFallback(primary: 'OLLAMA'|'OMNIROUTE', model: string | u
         const message = error instanceof Error ? error.message : String(error);
         const connection = error instanceof LLMConnectionError;
         errors.push(message);
-        if (!connection) break; // HTTP-level failures are not fixed by retrying/falling back
+        if (!connection) break;
         if (attempt < 3) {
           const delay = 500 * 2 ** (attempt - 1);
           logger.warn({ provider, attempt, delay, error: message }, 'LLM connection failed, retrying');
@@ -158,12 +147,7 @@ async function chatWithFallback(primary: 'OLLAMA'|'OMNIROUTE', model: string | u
   throw new Error(errors[errors.length - 1] || 'All LLM providers failed');
 }
 
-/**
- * Tool registry: built-ins from @ryuksaidso/agent-tools (the same source of
- * truth the API lists for the agent picker) plus configured MCP servers.
- */
 const staticTools = buildTools({ prisma });
-// Start MCP discovery immediately so runs never have to wait on it.
 const mcpToolsPromise: Promise<Record<string, ToolDef>> = mcpConfigured()
   ? loadMcpTools().then((tools) => {
       logger.info({ tools: Object.keys(tools) }, 'MCP tools loaded');

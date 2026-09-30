@@ -22,11 +22,6 @@ export {
   textToolsTool,
 } from './data';
 
-/**
- * Words that make conversational prompts unsearchable. `websearch_to_tsquery`
- * ANDs every token by default, so "who is faizan hameed" matched nothing —
- * documents rarely contain every filler word.
- */
 const STOPWORDS = new Set([
   'a', 'an', 'the', 'is', 'are', 'am', 'was', 'were', 'be', 'been', 'being', 'do', 'does', 'did', 'can', 'could',
   'should', 'would', 'will', 'shall', 'i', 'me', 'my', 'we', 'our', 'us', 'you', 'your', 'he', 'she', 'they', 'them',
@@ -35,22 +30,12 @@ const STOPWORDS = new Set([
   'want', 'know', 'information', 'info', 'details', 'there', 'here', 'if', 'then', 'than', 'so', 'very', 'just',
 ]);
 
-/**
- * Turn a natural-language prompt into OR-ed search terms. Documents matching
- * any significant term are returned and ranked by how many terms matched, so
- * everyday questions ("what does faizcasm do?") actually hit the knowledge base.
- */
 export function knowledgeTerms(query: string): string[] {
   const words = query.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 2);
   const significant = words.filter(w => !STOPWORDS.has(w));
   return [...new Set(significant.length ? significant : words)].slice(0, 12);
 }
 
-/**
- * Build the full tool registry used by both the API (metadata for the agent
- * picker) and the worker (execution). Single source of truth — never duplicate
- * tool logic in an app again.
- */
 export function buildTools(deps: BuildToolsDeps): Record<string, ToolDef> {
   const { prisma } = deps;
 

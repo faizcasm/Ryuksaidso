@@ -228,8 +228,6 @@ accountRouter.post('/workspaces/:organizationId/switch', async (req, res, next) 
 accountRouter.get('/workspace/invitations', async (req, res) => {
   const u = user(req as AuthenticatedRequest);
   requireRole(u, ['OWNER','ADMIN']);
-  // Never expose tokenHash: it is the credential that proves the invitation
-  // (the accept endpoint hashes the raw link token and compares it).
   const rows = await prisma.workspaceInvitation.findMany({
     where: { organizationId: u.organizationId },
     orderBy: { createdAt:'desc' },
@@ -259,9 +257,6 @@ accountRouter.post('/workspace/invitations', async (req, res, next) => {
     try { await sendWorkspaceInvitationEmail(email, org?.name || 'Workspace', body.role, inviteUrl); }
     catch (error) { emailSent=false; if ((process.env.NODE_ENV || 'development') === 'production') console.error('[RYUKSAIDSO] Invitation email failed:', error); else console.log(`[RYUKSAIDSO] Invitation URL for ${email}: ${inviteUrl}`); }
     await audit(u,'workspace.invited','invitation',invitation.id,{email,role:body.role,emailSent});
-    // The raw link is returned to the OWNER/ADMIN who created the invitation so
-    // the UI can offer "copy link" (and so invites still work when email is not
-    // configured). Only the invited mailbox can actually accept it.
     res.status(201).json({
       id: invitation.id,
       email,

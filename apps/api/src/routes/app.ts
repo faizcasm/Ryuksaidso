@@ -16,8 +16,6 @@ function requireRole(u: AuthUser, roles: string[]) { if (!roles.includes(u.role)
 
 appRouter.get('/me', async (req, res) => {
   const u = user(req as AuthenticatedRequest);
-  // Authoritative system role: reflects SYSTEM_ADMIN_EMAILS and any explicit
-  // grant/demotion even when the access token predates the change.
   const userRole = await resolveSystemRole(u);
   res.json({ user: { ...u, userRole } });
 });
@@ -58,8 +56,6 @@ appRouter.post('/tickets/:id/run', async (req, res) => {
     prisma.organization.findUnique({ where: { id: u.organizationId }, select: { llmProvider: true, ollamaModel: true, omnirouteModel: true } })
   ]);
   if (!agent) return res.status(409).json({ error: 'Conflict', message: 'Resolution agent is not configured' });
-  // Ticket runs prefer OmniRoute; when the OmniRoute daemon is unreachable the
-  // worker's chatWithFallback automatically retries on Ollama instead.
   const provider = 'OMNIROUTE' as const;
   const model = organization?.omnirouteModel || process.env.OMNIROUTE_MODEL
     || organization?.ollamaModel || process.env.OLLAMA_MODEL || '';
@@ -101,7 +97,6 @@ appRouter.post('/documents', async (req, res) => {
 appRouter.get('/agents', async (req,res)=>{ const u=user(req as AuthenticatedRequest); res.json(await prisma.agent.findMany({where:{organizationId:u.organizationId},orderBy:{name:'asc'}})); });
 appRouter.patch('/agents/:id', async (req,res,next)=>{ try { const u=user(req as AuthenticatedRequest); requireRole(u,['OWNER','ADMIN']); const body=updateAgentSchema.parse(req.body); const agent=await prisma.agent.findFirst({where:{id:req.params.id,organizationId:u.organizationId}}); if(!agent) return res.status(404).json({error:'NotFound',message:'Agent not found'}); const updated=await prisma.agent.update({where:{id:agent.id},data:body}); await audit(u,'agent.updated','agent',agent.id,body); res.json(updated); } catch(e){ next(e); } });
 appRouter.get('/tools', async (_req,res)=>{
-  // Built-ins plus any configured MCP servers (cached after first connect).
   const mcp = mcpConfigured() ? await loadMcpTools().catch(() => ({}) as Record<string, never>) : {};
   res.json(Object.values({ ...tools, ...mcp }).map(({execute,...meta})=>meta));
 });

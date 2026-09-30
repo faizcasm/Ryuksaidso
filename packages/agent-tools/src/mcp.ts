@@ -1,23 +1,11 @@
 import { dynamicImport, errorMessage } from './util';
 import type { ToolDef } from './types';
 
-/**
- * MCP (Model Context Protocol) integration. Servers are configured once via the
- * MCP_SERVERS env var (JSON), shared by API (tool listing) and worker
- * (execution), e.g.:
- *
- *   {"github":{"command":"npx","args":["-y","@modelcontextprotocol/server-github"],
- *             "env":{"GITHUB_PERSONAL_ACCESS_TOKEN":"ghp_..."}},
- *    "docs":{"url":"https://mcp.example.com/mcp"}}
- *
- * Tools are exposed to agents as `mcp__<server>__<tool>` with scope
- * `mcp:<server>`. Names that look like writes require human approval.
- */
 export type McpServerConfig = { command?: string; args?: string[]; env?: Record<string, string>; url?: string };
 
 const WRITE_PATTERN = /(^|_|\b)(create|update|delete|insert|patch|remove|post|send|write|publish|move|archive|reply|comment|upload|execute|trigger|merge|assign|invite|close|resolve|start|stop|add|set|update)(_|$|\b)/i;
 
-const CONNECT_TIMEOUT_MS = 30_000; // cold `npx` MCP servers need time to download on first connect
+const CONNECT_TIMEOUT_MS = 30_000;
 const CALL_TIMEOUT_MS = 30_000;
 
 let cacheKey: string | null = null;
@@ -110,7 +98,6 @@ async function connectServer(server: string, config: McpServerConfig): Promise<R
   return tools;
 }
 
-/** Load tools from all configured MCP servers, cached per config. */
 export async function loadMcpTools(raw: string | undefined = process.env.MCP_SERVERS): Promise<Record<string, ToolDef>> {
   const key = raw ?? '';
   if (cachedTools && cacheKey === key) return cachedTools;
@@ -124,7 +111,6 @@ export async function loadMcpTools(raw: string | undefined = process.env.MCP_SER
         try {
           Object.assign(merged, await connectServer(server, serverConfig));
         } catch (error) {
-          // A broken server must not break the product; its tools simply stay absent.
           console.warn(`[mcp] server "${server}" unavailable: ${errorMessage(error)}`);
         }
       }),
@@ -138,7 +124,6 @@ export async function loadMcpTools(raw: string | undefined = process.env.MCP_SER
   return inflight;
 }
 
-/** Drop the cache (tests / reconnects). */
 export function resetMcpCache(): void {
   cacheKey = null;
   cachedTools = null;

@@ -6,9 +6,6 @@ RUN corepack enable \
     && corepack prepare pnpm@10.15.0 --activate
 
 
-# ============================================================
-# Dependencies
-# ============================================================
 
 FROM base AS deps
 
@@ -18,9 +15,6 @@ COPY apps/web/package.json ./apps/web/package.json
 RUN pnpm install --no-frozen-lockfile --filter @ryuksaidso/web...
 
 
-# ============================================================
-# Builder
-# ============================================================
 
 FROM base AS builder
 
@@ -40,15 +34,11 @@ COPY apps/web ./apps/web
 
 WORKDIR /app/apps/web
 
-# Verify that Next actually exists before spending time building.
 RUN pnpm exec next --version
 
 RUN pnpm build
 
 
-# ============================================================
-# Production
-# ============================================================
 
 FROM node:22-alpine AS runner
 

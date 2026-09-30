@@ -1,6 +1,5 @@
 import { USER_AGENT, httpJson, softFail } from './util';
 
-/* ---------------------------------------------------------------- current_time */
 
 export const currentTimeTool = {
   name: 'current_time',
@@ -25,7 +24,6 @@ export const currentTimeTool = {
   },
 };
 
-/* --------------------------------------------------------------- current_weather */
 
 const WMO_CODES: Record<number, string> = {
   0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
@@ -40,12 +38,6 @@ const WMO_CODES: Record<number, string> = {
   95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Thunderstorm with heavy hail',
 };
 
-/**
- * The weather hosts can take ~10s to respond on some networks (IPv6/CDN
- * stalls), so every call here gets a 15s budget instead of the default 8s.
- * When Open-Meteo does fail outright, met.no (keyless, needs a User-Agent)
- * answers from the same coordinates.
- */
 async function metNoForecast(latitude: number, longitude: number, units: string) {
   const data = await httpJson(
     `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${latitude}&lon=${longitude}`,
@@ -87,7 +79,6 @@ async function geocodeCity(location: string) {
       };
     }
   } catch {
-    /* fall through to Nominatim */
   }
   const geo = await httpJson(
     `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(location)}`,
@@ -168,7 +159,6 @@ export const currentWeatherTool = {
     }),
 };
 
-/* -------------------------------------------------------------------- web_search */
 
 type SearchHit = { title: string; url: string; snippet: string };
 
@@ -190,7 +180,7 @@ async function duckDuckGo(query: string, limit: number): Promise<SearchHit[]> {
     let href = match[1];
     const redirected = /[?&]uddg=([^&]+)/.exec(href);
     if (redirected) {
-      try { href = decodeURIComponent(redirected[1]); } catch { /* keep original */ }
+      try { href = decodeURIComponent(redirected[1]); } catch {  }
     }
     if (href.startsWith('//')) href = `https:${href}`;
     hits.push({ title: TAGS(match[2]), url: href, snippet: '' });
@@ -241,7 +231,6 @@ export const webSearchTool = {
     }),
 };
 
-/* ------------------------------------------------------------------------- github */
 
 async function githubApi(path: string) {
   const token = process.env.GITHUB_TOKEN?.trim();
@@ -255,8 +244,6 @@ async function githubApi(path: string) {
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
     },
-    // single-source tool: give slow networks the same 15s budget the weather
-    // calls get (some hosts stall ~10s before answering).
     15_000,
   );
 }

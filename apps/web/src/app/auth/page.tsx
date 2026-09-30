@@ -6,7 +6,5 @@ export const metadata = {
 };
 
 export default function AuthPage() {
-  // AppShell renders the sign-in / register screen when there is no session,
-  // and redirects to /dashboard once the user is authenticated.
   return <AppShell />;
 }

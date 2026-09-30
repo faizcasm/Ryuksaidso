@@ -8,8 +8,6 @@ export const notFoundHandler = (req: import('express').Request, res: import('exp
 
 export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   if (err instanceof ZodError) {
-    // Surface the first offending field so API clients (and our own UI's
-    // readError) show something actionable instead of a generic sentence.
     const detail = err.issues
       .map(i => `${i.path.length ? i.path.join('.') : 'body'}: ${i.message}`)
       .join('; ');

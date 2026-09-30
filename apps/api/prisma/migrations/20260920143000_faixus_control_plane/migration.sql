@@ -71,7 +71,6 @@ CREATE INDEX "Evaluation_organizationId_createdAt_idx" ON "Evaluation"("organiza
 ALTER TABLE "Evaluation" ADD CONSTRAINT "Evaluation_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "Evaluation" ADD CONSTRAINT "Evaluation_agentId_fkey" FOREIGN KEY ("agentId") REFERENCES "Agent"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
--- Upgrade existing workspaces created before the control-plane models existed.
 INSERT INTO "Project" ("id","organizationId","name","slug","description","status","createdAt","updatedAt")
 SELECT md5(random()::text || clock_timestamp()::text), o."id", 'Core Agent Platform', 'core-agent-platform', 'Production agent workspace for experiments, traces, evaluations and safe tool execution.', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 FROM "Organization" o

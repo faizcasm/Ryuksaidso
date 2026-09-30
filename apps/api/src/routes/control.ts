@@ -42,9 +42,6 @@ function json(value: unknown): Prisma.InputJsonValue {
 }
 
 
-/* -------------------------------------------------------------------------- */
-/* Dashboard                                                                  */
-/* -------------------------------------------------------------------------- */
 
 controlRouter.get('/dashboard', async (req, res) => {
   const u = auth(req as AuthenticatedRequest);
@@ -232,9 +229,6 @@ controlRouter.get('/dashboard', async (req, res) => {
 });
 
 
-/* -------------------------------------------------------------------------- */
-/* Projects                                                                   */
-/* -------------------------------------------------------------------------- */
 
 controlRouter.get('/projects', async (req, res) => {
   const u = auth(req as AuthenticatedRequest);
@@ -345,9 +339,6 @@ controlRouter.patch(
 );
 
 
-/* -------------------------------------------------------------------------- */
-/* Agents                                                                     */
-/* -------------------------------------------------------------------------- */
 
 controlRouter.get('/agents', async (req, res) => {
   const u = auth(req as AuthenticatedRequest);
@@ -629,9 +620,6 @@ controlRouter.post(
 );
 
 
-/* -------------------------------------------------------------------------- */
-/* Runs                                                                       */
-/* -------------------------------------------------------------------------- */
 
 controlRouter.get('/runs', async (req, res) => {
   const u = auth(req as AuthenticatedRequest);
@@ -811,7 +799,6 @@ controlRouter.post(
 
       const organization = await prisma.organization.findUnique({ where: { id: u.organizationId }, select: { llmProvider: true, ollamaModel: true, omnirouteModel: true } });
       const provider = body.provider ?? organization?.llmProvider ?? 'OLLAMA';
-      // Workspace model is an override; fall back to the environment default so runs are not blocked.
       const envModel = provider === 'OMNIROUTE' ? process.env.OMNIROUTE_MODEL : process.env.OLLAMA_MODEL;
       const configuredModel = (provider === 'OMNIROUTE' ? organization?.omnirouteModel : organization?.ollamaModel) || envModel || '';
       if (!configuredModel) return res.status(409).json({ error:'ProviderNotConfigured', message:`${provider} has no model configured for this workspace. Configure it in Settings.` });
@@ -966,9 +953,6 @@ controlRouter.post(
 );
 
 
-/* -------------------------------------------------------------------------- */
-/* Policies                                                                   */
-/* -------------------------------------------------------------------------- */
 
 controlRouter.get(
   '/policies',
@@ -1097,9 +1081,6 @@ controlRouter.patch(
 );
 
 
-/* -------------------------------------------------------------------------- */
-/* Tool Registry                                                              */
-/* -------------------------------------------------------------------------- */
 
 controlRouter.get(
   '/tools',

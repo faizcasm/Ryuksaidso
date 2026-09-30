@@ -1,15 +1,8 @@
-/**
- * Documentation and Architecture Pages for Ryuksaidso
- * 
- * Author: Faizan Hameed
- * Website: http://faizcasm.me
- */
 
 import { Router } from 'express';
 
 export const docsRouter = Router();
 
-// Main documentation page
 docsRouter.get('/docs', (req, res) => {
   res.json({
     title: 'Ryuksaidso Documentation',
@@ -73,7 +66,6 @@ docsRouter.get('/docs', (req, res) => {
   });
 });
 
-// Architecture page
 docsRouter.get('/architecture', (req, res) => {
   res.json({
     title: 'Ryuksaidso Architecture',
@@ -215,7 +207,6 @@ docsRouter.get('/architecture', (req, res) => {
   });
 });
 
-// Detailed architecture visualization
 docsRouter.get('/architecture/visualize', (req, res) => {
   res.json({
     title: '3D Architecture Visualization',
@@ -270,7 +261,6 @@ docsRouter.get('/architecture/visualize', (req, res) => {
   });
 });
 
-// Agent documentation
 docsRouter.get('/docs/agents', (req, res) => {
   res.json({
     title: 'Agents & Workflows',
@@ -290,7 +280,6 @@ docsRouter.get('/docs/agents', (req, res) => {
   });
 });
 
-// LangChain documentation
 docsRouter.get('/docs/langchain', (req, res) => {
   res.json({
     title: 'LangChain Integration',
@@ -309,7 +298,6 @@ docsRouter.get('/docs/langchain', (req, res) => {
   });
 });
 
-// LangGraph documentation
 docsRouter.get('/docs/langgraph', (req, res) => {
   res.json({
     title: 'LangGraph Workflows',
@@ -328,12 +316,11 @@ const workflow = new StateGraph(AgentState)
   .addNode("executor", executorNode)
   .addEdge("__start__", "planner")
   .addEdge("planner", "executor");
-  
+
 const graph = workflow.compile({ checkpointer: new MemorySaver() });`,
   });
 });
 
-// MCP documentation
 docsRouter.get('/docs/mcp', (req, res) => {
   res.json({
     title: 'MCP (Model Calling Protocol)',
@@ -351,7 +338,6 @@ docsRouter.get('/docs/mcp', (req, res) => {
   });
 });
 
-// API endpoints
 docsRouter.get('/docs/api/auth', (req, res) => {
   res.json({
     endpoints: [
@@ -365,7 +351,6 @@ docsRouter.get('/docs/api/auth', (req, res) => {
   });
 });
 
-// Root endpoint
 docsRouter.get('/', (req, res) => {
   res.json({
     redirect: '/docs',

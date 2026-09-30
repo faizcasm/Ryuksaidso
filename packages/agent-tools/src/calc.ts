@@ -1,10 +1,3 @@
-/**
- * Minimal recursive-descent arithmetic evaluator. No `eval`, no Function —
- * the agent model can hand us arbitrary strings safely.
- *
- * Grammar: expr = term (('+'|'-') term)* ; term = factor (('*'|'/'|'%') factor)* ;
- * factor = unary ('^' factor)? ; unary = '-'* primary ; primary = number | fn(args) | const | (expr)
- */
 
 const FUNCTIONS: Record<string, (x: number) => number> = {
   sqrt: Math.sqrt, abs: Math.abs, round: Math.round, floor: Math.floor, ceil: Math.ceil,
@@ -44,7 +37,7 @@ export function calculate(expression: string): number {
     const base = parseUnary();
     if (peek() === '^') {
       i += 1;
-      return Math.pow(base, parseFactor()); // right-associative
+      return Math.pow(base, parseFactor());
     }
     return base;
   };

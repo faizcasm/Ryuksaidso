@@ -23,9 +23,6 @@ import {
 } from "lucide-react";
 import icon from "../icon.png";
 
-/* ================================================================== */
-/*  Types + the scripted runs that drive the playground               */
-/* ================================================================== */
 
 type StepState = "pending" | "running" | "done" | "failed";
 type Kind = "plan" | "tool" | "gate" | "synth";
@@ -36,8 +33,8 @@ type Step = {
   kind: Kind;
   name: string;
   detail: string;
-  ms: number; // playback time
-  real: string; // display duration
+  ms: number;
+  real: string;
   tokens: number;
   scope?: string;
   payload: string;
@@ -261,9 +258,6 @@ const EVAL_CASES = [
   { id: "edge-01", input: "Vague request with no ticket context", pass: false },
 ];
 
-/* ================================================================== */
-/*  Page                                                               */
-/* ================================================================== */
 
 const RUN_IDS: Record<string, string> = {
   triage: "run_8f31c2",
@@ -271,7 +265,6 @@ const RUN_IDS: Record<string, string> = {
   export: "run_77c1ab",
 };
 
-/* state of a static (pre-recorded) run's step at index i */
 const staticState = (run: RunMeta, i: number): StepState => {
   if (run.status !== "failed") return "done";
   const failAt = run.steps.findIndex(s => !!s.error);
@@ -312,7 +305,6 @@ export default function PlaygroundPage() {
   const activeRun = RUNS.find(r => r.key === activeKey) ?? RUNS[0];
   const isInteractive = activeRun.interactive;
 
-  /* ----- playback driver ----- */
   useEffect(() => {
     if (!isInteractive) return;
 
@@ -348,7 +340,6 @@ export default function PlaygroundPage() {
     }
   }, [phase, cursor, speed, isInteractive]);
 
-  /* ----- live elapsed clock ----- */
   useEffect(() => {
     if (!isInteractive) return;
     if (phase !== "queued" && phase !== "running" && phase !== "waiting") return;
@@ -361,7 +352,6 @@ export default function PlaygroundPage() {
     return () => window.clearInterval(id);
   }, [phase, isInteractive, elapsedRef]);
 
-  /* ----- actions ----- */
   const resetTriage = (start: boolean) => {
     setDecision(null);
     setCursor(0);
@@ -393,7 +383,6 @@ export default function PlaygroundPage() {
     }
   };
 
-  /* ----- derived ----- */
   const tokens = useMemo(() => {
     if (isInteractive)
       return stepStates.reduce(
@@ -415,9 +404,6 @@ export default function PlaygroundPage() {
 
   const gateStep = TRIAGE_STEPS[3];
 
-  /* ================================================================== */
-  /*  JSX                                                               */
-  /* ================================================================== */
 
   return (
     <div className="pg">
@@ -451,7 +437,7 @@ export default function PlaygroundPage() {
       </header>
 
       <div className="pg-body">
-        {/* ---------------- run rail ---------------- */}
+        {}
         <aside className="pg-rail">
           <span className="pg-label">Runs</span>
 
@@ -497,7 +483,7 @@ export default function PlaygroundPage() {
           </p>
         </aside>
 
-        {/* ---------------- run detail ---------------- */}
+        {}
         <main className="pg-main">
           <div className="pg-runhead">
             <div className="pg-runhead-left">
@@ -548,7 +534,7 @@ export default function PlaygroundPage() {
             </div>
           </div>
 
-          {/* progress segments */}
+          {}
           <div className="pg-progress">
             {(isInteractive ? TRIAGE_STEPS : activeRun.steps).map((s, i) => (
               <span
@@ -560,7 +546,7 @@ export default function PlaygroundPage() {
             ))}
           </div>
 
-          {/* timeline */}
+          {}
           <ol className="pg-steps">
             {(isInteractive ? TRIAGE_STEPS : activeRun.steps).map((step, i) => {
               const state: StepState = isInteractive
@@ -625,7 +611,7 @@ export default function PlaygroundPage() {
             })}
           </ol>
 
-          {/* decision persists after the gate unmounts */}
+          {}
           {isInteractive && decision !== null && phase !== "waiting" && (
             <div className={`pg-decision ${decision}`}>
               {decision === "approved" ? <Check size={15} /> : <X size={15} />}
@@ -637,7 +623,7 @@ export default function PlaygroundPage() {
             </div>
           )}
 
-          {/* approval gate */}
+          {}
           {isInteractive && phase === "waiting" && (
             <section className="pg-approval">
               <header>
@@ -710,7 +696,7 @@ export default function PlaygroundPage() {
             </section>
           )}
 
-          {/* outcome: failure */}
+          {}
           {isInteractive && phase === "failed" && (
             <section className="pg-outcome failed">
               <span className="pg-outcome-icon">
@@ -732,7 +718,7 @@ export default function PlaygroundPage() {
             </section>
           )}
 
-          {/* outcome: evaluation */}
+          {}
           {((isInteractive && phase === "completed") ||
             (!isInteractive && activeRun.status === "completed")) && (
             <section className="pg-eval">
@@ -785,7 +771,7 @@ export default function PlaygroundPage() {
             </section>
           )}
 
-          {/* outcome: static failure */}
+          {}
           {!isInteractive && activeRun.status === "failed" && (
             <section className="pg-outcome failed">
               <span className="pg-outcome-icon">
@@ -809,7 +795,7 @@ export default function PlaygroundPage() {
           )}
         </main>
 
-        {/* ---------------- side rail ---------------- */}
+        {}
         <aside className="pg-side">
           <section className="pg-metrics">
             <h4>
@@ -904,7 +890,6 @@ export default function PlaygroundPage() {
     padding-bottom: 0;
   }
 
-  /* ---------------- top bar ---------------- */
   .pg-top {
     position: sticky;
     top: 0;
@@ -917,8 +902,6 @@ export default function PlaygroundPage() {
     backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--line);
   }
-  /* Links render their <a> inside next/link, so styled-jsx cannot scope them —
-     any rule ending on a Link anchor must use :global() or it never applies. */
   .pg-top :global(.pg-brand) {
     display: flex;
     align-items: center;
@@ -992,7 +975,6 @@ export default function PlaygroundPage() {
     color: var(--text);
   }
 
-  /* ---------------- layout ---------------- */
   .pg-body {
     flex: 1;
     display: grid;
@@ -1005,7 +987,6 @@ export default function PlaygroundPage() {
     margin: 0 auto;
   }
 
-  /* ---------------- run rail ---------------- */
   .pg-rail {
     position: sticky;
     top: 84px;
@@ -1132,7 +1113,6 @@ export default function PlaygroundPage() {
     padding-top: 12px;
   }
 
-  /* ---------------- main column ---------------- */
   .pg-main {
     display: flex;
     flex-direction: column;
@@ -1267,7 +1247,6 @@ export default function PlaygroundPage() {
     filter: brightness(1.06);
   }
 
-  /* progress */
   .pg-progress {
     display: flex;
     gap: 5px;
@@ -1290,7 +1269,6 @@ export default function PlaygroundPage() {
     background: var(--bad);
   }
 
-  /* ---------------- timeline ---------------- */
   .pg-steps {
     list-style: none;
     margin: 0;
@@ -1470,7 +1448,6 @@ export default function PlaygroundPage() {
     background: color-mix(in srgb, var(--bg) 65%, var(--panel2));
   }
 
-  /* ---------------- approval gate ---------------- */
   .pg-approval {
     border: 1px solid color-mix(in srgb, var(--warn) 55%, transparent);
     background: color-mix(in srgb, var(--warn) 8%, var(--panel));
@@ -1616,7 +1593,6 @@ export default function PlaygroundPage() {
     color: color-mix(in srgb, var(--bad) 85%, var(--text));
   }
 
-  /* ---------------- outcomes ---------------- */
   .pg-outcome {
     display: flex;
     align-items: flex-start;
@@ -1680,7 +1656,6 @@ export default function PlaygroundPage() {
     color: var(--accent2);
   }
 
-  /* ---------------- evaluation ---------------- */
   .pg-eval {
     border: 1px solid color-mix(in srgb, var(--good) 40%, transparent);
     background: color-mix(in srgb, var(--good) 7%, var(--panel));
@@ -1818,7 +1793,6 @@ export default function PlaygroundPage() {
     color: color-mix(in srgb, var(--text) 85%, var(--muted));
   }
 
-  /* ---------------- side rail ---------------- */
   .pg-side {
     position: sticky;
     top: 84px;
@@ -1928,7 +1902,6 @@ export default function PlaygroundPage() {
     color: var(--accent2);
   }
 
-  /* ---------------- footer ---------------- */
   .pg-foot {
     border-top: 1px solid var(--line);
     padding: 16px clamp(16px, 3vw, 32px);
@@ -1959,7 +1932,6 @@ export default function PlaygroundPage() {
     color: var(--text);
   }
 
-  /* ---------------- motion ---------------- */
   @keyframes pgPulse {
     0%,
     100% {
@@ -1996,7 +1968,6 @@ export default function PlaygroundPage() {
     }
   }
 
-  /* ---------------- responsive ---------------- */
   @media (max-width: 1180px) {
     .pg-body {
       grid-template-columns: minmax(0, 1fr) 260px;

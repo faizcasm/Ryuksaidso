@@ -7,7 +7,6 @@ export type ToolContext = {
 export type ToolDef = {
   name: string;
   description: string;
-  /** UI grouping for the agent tool picker (Knowledge, Utilities, ...). */
   category: string;
   scope: string;
   requiresApproval: boolean;
@@ -15,8 +14,6 @@ export type ToolDef = {
 };
 
 export type BuildToolsDeps = {
-  /** Injected Prisma client (API and worker each pass their own). */
   prisma: any;
-  /** Extra tools merged in (e.g. tools discovered from configured MCP servers). */
   extra?: Record<string, ToolDef>;
 };

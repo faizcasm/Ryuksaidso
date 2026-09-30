@@ -1,8 +1,3 @@
-/**
- * The package compiles to CommonJS, where TypeScript rewrites `import()` into
- * `require()`. The MCP SDK ships ESM-only entry points, so route dynamic
- * imports through `new Function` to keep a genuine runtime import.
- */
 export function dynamicImport<T = any>(specifier: string): Promise<T> {
   return new Function('specifier', 'return import(specifier)')(specifier) as Promise<T>;
 }
@@ -24,11 +19,6 @@ export async function httpJson(url: string, init: RequestInit = {}, timeoutMs = 
   }
 }
 
-/**
- * External services (weather, search, GitHub, browser) are flaky by nature.
- * Returning `{ error }` lets the synthesiser explain the outage instead of
- * failing the whole run.
- */
 export async function softFail(fn: () => Promise<unknown>): Promise<unknown> {
   try {
     return await fn();

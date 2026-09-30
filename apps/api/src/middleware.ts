@@ -61,10 +61,6 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   next();
 }
 
-/**
- * Middleware to check if user has admin role
- * Attaches isAdmin flag to request
- */
 export async function requireAdminRole(req: Request, res: Response, next: NextFunction) {
   try {
     const authReq = req as AuthenticatedRequest;
@@ -93,25 +89,17 @@ export async function requireAdminRole(req: Request, res: Response, next: NextFu
   }
 }
 
-/**
- * Middleware to restrict access to admin users only
- * Use after requireAdminRole middleware
- */
 export function adminOnly(req: Request, res: Response, next: NextFunction) {
   const authReq = req as AuthenticatedRequest;
   if (!authReq.isAdmin) {
-    return res.status(403).json({ 
-      error: 'Forbidden', 
-      message: 'This action requires admin privileges' 
+    return res.status(403).json({
+      error: 'Forbidden',
+      message: 'This action requires admin privileges'
     });
   }
   next();
 }
 
-/**
- * Middleware to restrict access to admin users only (strict)
- * Can be used standalone after requireAuth
- */
 export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   try {
     const authReq = req as AuthenticatedRequest;
@@ -125,9 +113,9 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     });
 
     if (!user || user.userRole !== 'ADMIN') {
-      return res.status(403).json({ 
-        error: 'Forbidden', 
-        message: 'This action requires admin privileges' 
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'This action requires admin privileges'
       });
     }
 

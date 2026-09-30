@@ -33,9 +33,6 @@ import Image from "next/image";
 import Link from "next/link";
 import icon from "../icon.png";
 
-/* ================================================================== */
-/*  Small building blocks used by the documentation body              */
-/* ================================================================== */
 
 const slug = (s: string) =>
   s
@@ -186,9 +183,6 @@ function Endpoints({ items }: { items: [string, string, string][] }) {
   );
 }
 
-/* ================================================================== */
-/*  Documentation content                                              */
-/* ================================================================== */
 
 type Section = {
   id: string;
@@ -1354,7 +1348,6 @@ export default function DocsPage() {
     window.scrollTo({ top: y, behavior: "smooth" });
   };
 
-  /* deep links: /docs#approvals opens that section */
   useEffect(() => {
     const id = window.location.hash.replace("#", "");
     if (!id || !SECTIONS.some(s => s.id === id)) return;
@@ -1363,7 +1356,6 @@ export default function DocsPage() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, []);
 
-  /* reading progress */
   useEffect(() => {
     const onScroll = () => {
       const h = document.documentElement;
@@ -1379,7 +1371,6 @@ export default function DocsPage() {
     };
   }, []);
 
-  /* which heading is in view */
   useEffect(() => {
     const ids = current.toc.map(slug);
     const onScroll = () => {
@@ -1395,7 +1386,6 @@ export default function DocsPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [current]);
 
-  /* "/" focuses search, Escape closes the mobile nav */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (document.activeElement as HTMLElement | null)?.tagName;
@@ -1580,7 +1570,6 @@ export default function DocsPage() {
       </div>
 
       <style jsx global>{`
-        /* ============ shell ============ */
         .dx {
           min-height: 100vh;
           background:
@@ -1599,7 +1588,6 @@ export default function DocsPage() {
           transition: width 0.15s linear;
         }
 
-        /* ============ header ============ */
         .dx-header {
           position: sticky;
           top: 0;
@@ -1734,7 +1722,6 @@ export default function DocsPage() {
           cursor: pointer;
         }
 
-        /* ============ body layout ============ */
         .dx-body {
           display: grid;
           grid-template-columns: 264px minmax(0, 1fr) 208px;
@@ -1743,7 +1730,6 @@ export default function DocsPage() {
           margin: 0 auto;
         }
 
-        /* ---- sidebar ---- */
         .dx-nav {
           position: sticky;
           top: 57px;
@@ -1836,7 +1822,6 @@ export default function DocsPage() {
           background: rgba(255, 255, 255, 0.05);
           color: var(--text);
         }
-        /* ---- main column ---- */
         .dx-main {
           padding: 34px 42px 70px;
           min-width: 0;
@@ -1908,7 +1893,6 @@ export default function DocsPage() {
           background: rgba(255, 255, 255, 0.03);
         }
 
-        /* ---- article ---- */
         .dx-content {
           max-width: 780px;
           display: grid;
@@ -2273,7 +2257,6 @@ export default function DocsPage() {
           display: flex;
         }
 
-        /* ---- pager & footer ---- */
         .dx-pager {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -2327,7 +2310,6 @@ export default function DocsPage() {
           color: #a78bfa;
         }
 
-        /* ---- right rail ---- */
         .dx-toc {
           position: sticky;
           top: 57px;
@@ -2378,7 +2360,6 @@ export default function DocsPage() {
           font-weight: 700;
         }
 
-        /* ---- responsive ---- */
         @media (max-width: 1180px) {
           .dx-body {
             grid-template-columns: 250px minmax(0, 1fr);

@@ -19,10 +19,6 @@ const passwordRecoveryLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// Sign-in, registration and email verification are the credential-guessing
-// surface. skipSuccessfulRequests keeps the budget for FAILED attempts only,
-// so legitimate logins (and the dashboard's normal traffic) are never throttled
-// while password/token spraying is.
 const credentialLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
@@ -33,8 +29,6 @@ const credentialLimiter = rateLimit({
 });
 
 function issue(res: Response, user: { id:string; email:string; name:string; organizationId:string; role:string }) {
-  // createSession resolves the system role (User.userRole) and returns it, so
-  // the login/register response already carries what the Admin tab gates on.
   return createSession(user).then(({ accessToken, refreshToken, user: subject }) => {
     setSessionCookies(res, accessToken, refreshToken);
     return res.json({ user: subject });
@@ -162,7 +156,6 @@ authRouter.post('/forgot-password', passwordRecoveryLimiter, async (req, res, ne
     const email = normalizeEmail(body.email);
     const user = await prisma.user.findUnique({ where: { email }, include: { memberships: true } });
 
-    // Always return the same response so this endpoint cannot be used as an account enumerator.
     const response = { message: 'If that email is registered, a password reset link has been sent.' };
     if (!user) return res.status(202).json(response);
 
@@ -177,8 +170,6 @@ authRouter.post('/forgot-password', passwordRecoveryLimiter, async (req, res, ne
     try {
       await sendPasswordResetEmail(user.email, resetUrl);
     } catch (error) {
-      // Keep the response identical for unknown and known accounts (no enumeration)
-      // and surface the SMTP problem in the logs instead of failing the request.
       logger.error('Password reset email could not be sent', { event: 'password_reset_email_failed', email: user.email, error: error instanceof Error ? error.message : String(error) });
       if (config.NODE_ENV !== 'production') console.log(`[${config.APP_NAME}] Password reset URL for ${user.email}: ${resetUrl}`);
     }

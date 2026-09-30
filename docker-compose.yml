@@ -23,10 +23,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-  # Bridges containers to LLM gateways that only listen on the host loopback
-  # (Ollama binds 127.0.0.1:11434 unless OLLAMA_HOST says otherwise). Host
-  # networking lets it dial 127.0.0.1 while binding on the docker bridge that
-  # `host.docker.internal` resolves to. See infra/llm-proxy.js.
   llm-proxy:
     image: node:22-alpine
     network_mode: host
@@ -50,7 +46,6 @@ services:
       OMNIROUTE_URL: ${OMNIROUTE_URL_DOCKER:-http://host.docker.internal:20129/v1}
       OMNIROUTE_API: ${OMNIROUTE_API:-}
       OMNIROUTE_MODEL: ${OMNIROUTE_MODEL:-}
-      # host loopback is unreachable from containers -> llm-proxy forwards these
       OLLAMA_URL: ${OLLAMA_URL_DOCKER:-http://host.docker.internal:11435/v1}
       OLLAMA_API: ${OLLAMA_API:-ollama}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b-instruct-q4_K_M}
@@ -72,7 +67,6 @@ services:
       OMNIROUTE_URL: ${OMNIROUTE_URL_DOCKER:-http://host.docker.internal:20129/v1}
       OMNIROUTE_API: ${OMNIROUTE_API:-}
       OMNIROUTE_MODEL: ${OMNIROUTE_MODEL:-}
-      # host loopback is unreachable from containers -> llm-proxy forwards these
       OLLAMA_URL: ${OLLAMA_URL_DOCKER:-http://host.docker.internal:11435/v1}
       OLLAMA_API: ${OLLAMA_API:-ollama}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b-instruct-q4_K_M}
@@ -84,7 +78,6 @@ services:
       GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
       GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
       GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-http://localhost:4001/api/auth/oauth/github/callback}
-      # Agent tool integrations
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       MCP_SERVERS: ${MCP_SERVERS:-}
       SMTP_HOST: ${SMTP_HOST:-}
@@ -92,7 +85,6 @@ services:
       SMTP_SECURE: ${SMTP_SECURE:-false}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      # System RBAC bootstrap: emails granted User.userRole=ADMIN at sign-in
       SYSTEM_ADMIN_EMAILS: ${SYSTEM_ADMIN_EMAILS:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-600}
@@ -119,13 +111,11 @@ services:
       OMNIROUTE_URL: ${OMNIROUTE_URL_DOCKER:-http://host.docker.internal:20129/v1}
       OMNIROUTE_API: ${OMNIROUTE_API:-}
       OMNIROUTE_MODEL: ${OMNIROUTE_MODEL:-}
-      # host loopback is unreachable from containers -> llm-proxy forwards these
       OLLAMA_URL: ${OLLAMA_URL_DOCKER:-http://host.docker.internal:11435/v1}
       OLLAMA_API: ${OLLAMA_API:-ollama}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b-instruct-q4_K_M}
       DOCKER_RUNTIME: "true"
       WORKER_CONCURRENCY: 4
-      # Agent tool integrations (GitHub + MCP)
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       MCP_SERVERS: ${MCP_SERVERS:-}
     extra_hosts:

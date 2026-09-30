@@ -23,9 +23,6 @@ import {
   Zap,
 } from "lucide-react";
 
-/* ------------------------------------------------------------------ */
-/* 3D background: starfield + rotating wireframe icosahedron + orbits  */
-/* ------------------------------------------------------------------ */
 function HeroCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -41,7 +38,6 @@ function HeroCanvas() {
     let dpr = 1;
     let raf = 0;
 
-    // --- icosahedron geometry -------------------------------------
     const t = (1 + Math.sqrt(5)) / 2;
     const base: Array<[number, number, number]> = [
       [-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0],
@@ -64,7 +60,6 @@ function HeroCanvas() {
       }
     }
 
-    // --- starfield -------------------------------------------------
     const stars = Array.from({ length: 220 }, () => ({
       x: (Math.random() - 0.5) * 1600,
       y: (Math.random() - 0.5) * 1200,
@@ -116,12 +111,10 @@ function HeroCanvas() {
       ax: number,
       ay: number,
     ) => {
-      // rotate Y
       const cosY = Math.cos(ay);
       const sinY = Math.sin(ay);
       let x = v.x * cosY - v.z * sinY;
       let z = v.x * sinY + v.z * cosY;
-      // rotate X
       const cosX = Math.cos(ax);
       const sinX = Math.sin(ax);
       let y = v.y * cosX - z * sinX;
@@ -139,7 +132,6 @@ function HeroCanvas() {
 
       ctx.clearRect(0, 0, width, height);
 
-      // --- deep glow ----------------------------------------------
       const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 460 * scale);
       glow.addColorStop(0, "rgba(139,92,246,0.16)");
       glow.addColorStop(0.45, "rgba(34,211,238,0.05)");
@@ -147,7 +139,6 @@ function HeroCanvas() {
       ctx.fillStyle = glow;
       ctx.fillRect(0, 0, width, height);
 
-      // --- starfield ----------------------------------------------
       for (const s of stars) {
         if (!reduced) {
           s.z -= 1.6;
@@ -169,7 +160,6 @@ function HeroCanvas() {
         ctx.fill();
       }
 
-      // --- orbit rings --------------------------------------------
       rings.forEach((ring, idx) => {
         const phase = ring.phase + (reduced ? 0 : time * ring.speed);
         ctx.beginPath();
@@ -190,7 +180,6 @@ function HeroCanvas() {
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        // travelling satellite
         let sat = {
           x: Math.cos(phase * 3 + idx) * ring.r,
           y: Math.sin(phase * 3 + idx) * ring.r,
@@ -204,7 +193,6 @@ function HeroCanvas() {
         ctx.fill();
       });
 
-      // --- wireframe icosahedron ----------------------------------
       const ay = (reduced ? 0.6 : time * 0.00028) + pointerX * 0.5;
       const ax = (reduced ? 0.35 : Math.sin(time * 0.00021) * 0.5) + pointerY * 0.35;
       const radius = 210;
@@ -245,7 +233,6 @@ function HeroCanvas() {
         }
       });
 
-      // --- core pulse ---------------------------------------------
       const pulse = 0.5 + Math.sin(time * 0.0016) * 0.5;
       const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, 90 * scale);
       core.addColorStop(0, `rgba(139,92,246,${0.28 + pulse * 0.18})`);
@@ -271,9 +258,6 @@ function HeroCanvas() {
   return <canvas ref={canvasRef} className="hero-canvas" aria-hidden="true" />;
 }
 
-/* ------------------------------------------------------------------ */
-/* Page                                                                */
-/* ------------------------------------------------------------------ */
 const FEATURES = [
   {
     icon: ShieldCheck,
@@ -543,7 +527,7 @@ export default function LandingPage() {
       <div className="orb orb-b" />
       <div className="grid-fade" />
 
-      {/* ---------------- header ---------------- */}
+      {}
       <header className="site-header">
         <Link href="/" className="brand">
           <span className="brand-mark">
@@ -572,7 +556,7 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* ---------------- hero ---------------- */}
+      {}
       <section className="hero">
         <div className="hero-inner">
           <span className="eyebrow">
@@ -622,7 +606,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ---------------- features ---------------- */}
+      {}
       <section className="section">
         <div className="section-head" data-reveal>
           <span className="eyebrow">Platform</span>
@@ -646,7 +630,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ---------------- showcase ---------------- */}
+      {}
       <section className="section">
         <div className="section-head" data-reveal>
           <span className="eyebrow">Explore</span>
@@ -671,7 +655,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ---------------- product tour ---------------- */}
+      {}
       <section className="section" id="product-tour">
         <div className="section-head" data-reveal>
           <span className="eyebrow">Product tour</span>
@@ -701,7 +685,7 @@ export default function LandingPage() {
           </div>
 
           <div className="tour-panel">
-            {/* ---- traces ---- */}
+            {}
             {tourTab === "traces" && (
               <div className="tour-body">
                 <div className="tour-runhead">
@@ -742,7 +726,7 @@ export default function LandingPage() {
               </div>
             )}
 
-            {/* ---- approvals ---- */}
+            {}
             {tourTab === "approvals" && (
               <div className="tour-body">
                 <div className="approval">
@@ -831,7 +815,7 @@ export default function LandingPage() {
               </div>
             )}
 
-            {/* ---- evaluations ---- */}
+            {}
             {tourTab === "evaluations" && (
               <div className="tour-body">
                 <div className="eval">
@@ -880,7 +864,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ---------------- how it works ---------------- */}
+      {}
       <section className="section" id="how-it-works">
         <div className="section-head" data-reveal>
           <span className="eyebrow">How it works</span>
@@ -933,7 +917,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ---------------- final CTA ---------------- */}
+      {}
       <section className="section">
         <div className="cta-panel" data-reveal>
           <span className="eyebrow">Get started</span>
@@ -955,7 +939,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ---------------- footer ---------------- */}
+      {}
       <footer className="site-footer">
         <div className="footer-brand">
           <span className="brand-mark">
@@ -1045,7 +1029,6 @@ export default function LandingPage() {
           padding-right: 24px;
         }
 
-        /* ---------- header ---------- */
         .site-header {
           display: flex;
           align-items: center;
@@ -1148,7 +1131,6 @@ export default function LandingPage() {
           border-radius: 13px;
         }
 
-        /* ---------- hero ---------- */
         .hero {
           padding-top: 70px;
           padding-bottom: 40px;
@@ -1260,7 +1242,6 @@ export default function LandingPage() {
           color: var(--muted);
         }
 
-        /* ---------- sections ---------- */
         .section {
           padding-top: 84px;
         }
@@ -1377,7 +1358,6 @@ export default function LandingPage() {
           color: #a78bfa;
         }
 
-        /* ---------- product tour ---------- */
         .tour {
           border: 1px solid var(--line);
           border-radius: 22px;
@@ -1487,7 +1467,6 @@ export default function LandingPage() {
           background: rgba(255, 255, 255, 0.03);
         }
 
-        /* trace timeline */
         .trace {
           list-style: none;
           margin: 0;
@@ -1564,7 +1543,6 @@ export default function LandingPage() {
           padding-top: 14px;
         }
 
-        /* approval gate */
         .approval {
           border: 1px solid rgba(245, 158, 11, 0.3);
           border-radius: 18px;
@@ -1676,7 +1654,6 @@ export default function LandingPage() {
           opacity: 0.75;
         }
 
-        /* evaluations */
         .eval {
           display: grid;
           gap: 16px;
@@ -1792,7 +1769,6 @@ export default function LandingPage() {
           border: 1px solid rgba(244, 63, 94, 0.3);
         }
 
-        /* how it works */
         .flow {
           list-style: none;
           margin: 0;
@@ -1919,7 +1895,6 @@ export default function LandingPage() {
           line-height: 1.65;
         }
 
-        /* ---------- footer ---------- */
         .site-footer {
           margin-top: 96px;
           padding-top: 26px;
@@ -1965,7 +1940,6 @@ export default function LandingPage() {
           font-size: 10px;
         }
 
-        /* ---------- reveal ---------- */
         .landing :global([data-reveal]) {
           opacity: 0;
           transform: translateY(26px);

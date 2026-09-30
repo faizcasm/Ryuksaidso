@@ -24,7 +24,6 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/worker/node_modules ./apps/worker/node_modules
 COPY --from=build /app/apps/worker/dist ./apps/worker/dist
 COPY --from=build /app/packages/agent-runtime/dist ./packages/agent-runtime/dist
-# whole package (dist + its own node_modules for the MCP SDK)
 COPY --from=build /app/packages/agent-tools ./packages/agent-tools
 COPY package.json pnpm-workspace.yaml ./
 COPY apps/worker/package.json apps/worker/package.json

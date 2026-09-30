@@ -11,10 +11,6 @@ interface UseUserRoleReturn {
   refetch: () => Promise<void>;
 }
 
-/**
- * Hook to fetch and manage user role
- * Usage: const { user, isAdmin, isLoading } = useUserRole();
- */
 export function useUserRole(): UseUserRoleReturn {
   const [user, setUser] = useState<UserWithRole | null>(null);
   const [isAdminUser, setIsAdminUser] = useState(false);
@@ -26,8 +22,6 @@ export function useUserRole(): UseUserRoleReturn {
       setIsLoading(true);
       setError(null);
 
-      // The API runs on its own origin (no Next rewrite for /api), so this must
-      // be absolute — a relative /api/admin/me/role 404s on the web origin.
       const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
       const response = await fetch(`${API}/admin/me/role`, {
         method: 'GET',
@@ -73,18 +67,11 @@ export function useUserRole(): UseUserRoleReturn {
   };
 }
 
-/**
- * Hook to check if current user is admin
- * Usage: const isAdmin = useIsAdmin();
- */
 export function useIsAdmin(): boolean {
   const { isAdmin: isAdminUser } = useUserRole();
   return isAdminUser;
 }
 
-/**
- * Hook to manage user roles (admin only)
- */
 interface UseManageUserRolesReturn {
   users: UserWithRole[];
   isLoading: boolean;

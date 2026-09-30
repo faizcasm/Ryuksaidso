@@ -25,7 +25,6 @@ export const createDocumentSchema = z.object({
   title: z.string().trim().min(1).max(300),
   source: z.string().trim().max(500).default('manual'),
   content: z.string().min(1).max(2_000_000),
-  // Optional: restrict retrieval of this document to one agent (null/omitted = shared).
   agentId: z.string().cuid().nullish(),
   metadata: z.record(z.string(), z.unknown()).optional()
 });

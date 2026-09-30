@@ -13,16 +13,11 @@ async function admin(req: AuthenticatedRequest): Promise<AuthUser> {
   if (!user) throw new Error('Authenticated user missing');
   const membership = await prisma.membership.findFirst({ where: { userId:user.id, organizationId:user.organizationId }, select:{ role:true } });
   const membershipOk = !!membership && ['OWNER','ADMIN'].includes(membership.role);
-  // Workspace admins (Membership OWNER/ADMIN) and system admins both pass. The
-  // system role is read fresh from the DB — token claims can lag a revocation —
-  // so a platform admin can still reach the Admin surface from a workspace where
-  // they only hold a VIEWER membership (e.g. after switching into it).
   const system = await prisma.user.findUnique({ where: { id: user.id }, select: { userRole: true } });
   if (!membershipOk && system?.userRole !== 'ADMIN') throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
   return { ...user, role: membership?.role ?? 'VIEWER', userRole: system?.userRole ?? 'USER' };
 }
 
-// Get users with their roles
 adminRouter.get('/users', requireAdmin, async (req, res) => {
   try {
     const u = await admin(req as AuthenticatedRequest);
@@ -51,7 +46,6 @@ adminRouter.get('/users', requireAdmin, async (req, res) => {
   }
 });
 
-// Update user role (ADMIN/USER)
 adminRouter.patch('/users/:userId/role', requireAdmin, async (req, res) => {
   try {
     const u = await admin(req as AuthenticatedRequest);
@@ -71,7 +65,6 @@ adminRouter.patch('/users/:userId/role', requireAdmin, async (req, res) => {
       return res.status(404).json({ error: 'NotFound', message: 'User not found' });
     }
 
-    // Prevent self-demotion from ADMIN
     if (user.id === u.id && userRole === 'USER') {
       return res.status(400).json({ error: 'ValidationError', message: 'You cannot demote your own account' });
     }
@@ -96,7 +89,6 @@ adminRouter.patch('/users/:userId/role', requireAdmin, async (req, res) => {
   }
 });
 
-// Get current user's role
 adminRouter.get('/me/role', requireAuth, async (req, res) => {
   try {
     const authReq = req as AuthenticatedRequest;
@@ -123,8 +115,6 @@ adminRouter.get('/me/role', requireAuth, async (req, res) => {
 });
 
 adminRouter.get('/overview', async (req, res) => {
-  // Admin dashboards are refresh-driven: never let a proxy or the browser
-  // hand back a cached snapshot when the operator hits Refresh.
   res.set('Cache-Control', 'no-store');
   res.set('Pragma', 'no-cache');
   const u = await admin(req as AuthenticatedRequest);
@@ -145,7 +135,6 @@ adminRouter.get('/overview', async (req, res) => {
     prisma.user.count({ where:{ emailVerifiedAt:{not:null}, memberships:{some:{organizationId:u.organizationId}} } })
   ]);
 
-  // Tool executions are stored as steps whose action reads "Execute <tool>".
   const toolGroups: { action: string; _count: { _all: number }; _avg: { durationMs: number | null } }[] = await prisma.agentStep
     .groupBy({
       by: ['action'],
@@ -172,7 +161,6 @@ adminRouter.get('/overview', async (req, res) => {
     topAgentMap.set(name, current);
   }
 
-  // ---- derived analytics -------------------------------------------------
   const providerCounts = new Map<string, number>();
   const statusCounts = new Map<string, number>();
   for (const run of runs) {
@@ -182,8 +170,6 @@ adminRouter.get('/overview', async (req, res) => {
   const providerSplit = [...providerCounts.entries()].map(([provider, runs]) => ({ provider, runs })).sort((a,b)=>b.runs-a.runs);
   const statusSplit = [...statusCounts.entries()].map(([status, runs]) => ({ status, runs })).sort((a,b)=>b.runs-a.runs);
 
-  // Daily signups over the window + how many members predate it, so the chart
-  // can show both daily intake and cumulative growth.
   const registrations = Array.from({ length: 14 }, (_, i) => {
     const d = new Date(start); d.setDate(d.getDate() + i);
     const key = d.toISOString().slice(0,10);
@@ -200,7 +186,6 @@ adminRouter.get('/overview', async (req, res) => {
       avgMs: Math.round(g._avg?.durationMs ?? 0),
     }));
 
-  // ---- system health (time-boxed; a dead dependency degrades, never blocks)
   const timed = async <T>(fn: () => Promise<T>, ms: number): Promise<{ ok: boolean; latencyMs: number; value?: T; error?: string }> => {
     const started = Date.now();
     try {

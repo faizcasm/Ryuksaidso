@@ -37,7 +37,7 @@ async function request<T>(path: string, options: RequestInit = {}, retried = fal
   if (!res.ok) {
     const text = await res.text();
     const error = new Error(text) as Error & { status?: number };
-    error.status = res.status; // lets callers tell "expired/forbidden" from transient failures
+    error.status = res.status;
     throw error;
   }
   if (res.status === 204) return undefined as T;

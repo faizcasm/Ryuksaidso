@@ -1,12 +1,6 @@
 import { USER_AGENT, httpJson, softFail } from './util';
 
-/* -------------------------------------------------------------- currency_convert */
 
-/**
- * Frankfurter serves ECB reference rates (keyless, no account). Rates refresh
- * once per workday around 16:00 CET — good enough for an agent that gets asked
- * "what's 250 USD in EUR" mid-conversation.
- */
 export const currencyConvertTool = {
   name: 'currency_convert',
   description:
@@ -26,7 +20,7 @@ export const currencyConvertTool = {
       const data = await httpJson(
         `https://api.frankfurter.app/latest?from=${from}&to=${to}`,
         { headers: { 'user-agent': USER_AGENT } },
-        15_000, // single-source tool — same 15s budget as weather/github
+        15_000,
       );
       const rate = Number(data?.rates?.[to]);
       if (!Number.isFinite(rate) || rate <= 0) {
@@ -43,7 +37,6 @@ export const currencyConvertTool = {
     }),
 };
 
-/* --------------------------------------------------------------- unit_convert */
 
 type UnitDef = { factor: number; aliases?: string[] };
 
@@ -143,7 +136,7 @@ function findUnit(name: string): { key: string; def: UnitDef; group: string } | 
 function temperatureToCelsius(value: number, from: string): number {
   if (from === 'c') return value;
   if (from === 'f') return ((value - 32) * 5) / 9;
-  return value - 273.15; // kelvin
+  return value - 273.15;
 }
 
 function temperatureFromCelsius(celsius: number, to: string): number {
@@ -176,17 +169,14 @@ export const unitConvertTool = {
     } else {
       converted = (value * from.def.factor) / to.def.factor;
     }
-    // 10 significant digits kills floating-point noise (0.30000000000000004).
     const rounded = Number(converted.toPrecision(10));
     return { value, from: from.key, to: to.key, group: from.group, result: rounded };
   },
 };
 
-/* ------------------------------------------------------------------ dictionary */
 
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 
-/** Rich source: phonetics + example sentences; sometimes unreachable. */
 async function dictionaryApi(word: string) {
   const data = await httpJson(
     `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`,
@@ -209,7 +199,6 @@ async function dictionaryApi(word: string) {
   return { word: entry.word || word, phonetic, meanings };
 }
 
-/** Fallback: Wiktionary's REST API (Wikipedia infrastructure — always up). */
 async function wiktionaryApi(word: string) {
   const data = await httpJson(
     `https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(word)}`,
@@ -251,7 +240,6 @@ export const dictionaryTool = {
     }),
 };
 
-/* ------------------------------------------------------------------------ news */
 
 export const newsTool = {
   name: 'news',
@@ -267,7 +255,7 @@ export const newsTool = {
       const url = topic
         ? `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(topic)}&tags=story&hitsPerPage=${limit}`
         : `https://hn.algolia.com/api/v1/search?tags=front_page&hitsPerPage=${limit}`;
-      const data = await httpJson(url, { headers: { 'user-agent': USER_AGENT } }, 15_000); // single-source tool
+      const data = await httpJson(url, { headers: { 'user-agent': USER_AGENT } }, 15_000);
       const stories = (data?.hits ?? []).map((hit: any) => ({
         title: String(hit.title ?? ''),
         url: hit.url || `https://news.ycombinator.com/item?id=${hit.objectID}`,
@@ -282,7 +270,6 @@ export const newsTool = {
     }),
 };
 
-/* ----------------------------------------------------------------- text_tools */
 
 function toSlug(text: string): string {
   return text

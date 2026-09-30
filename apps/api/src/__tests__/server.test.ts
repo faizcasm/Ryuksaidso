@@ -29,7 +29,6 @@ describe('API', () => {
       .send({ title: '' });
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('ValidationError');
-    // the message names the offending field so clients can show something useful
     expect(response.body.message).toContain('title');
     expect(Array.isArray(response.body.issues)).toBe(true);
   });
@@ -41,8 +40,6 @@ describe('API', () => {
   });
 });
 
-// Metrics are intentionally public so Prometheus can scrape them without a user token.
-// The endpoint must still return a valid Prometheus exposition payload.
 describe('observability', () => {
   it('exposes Prometheus metrics', async () => {
     const response = await request(createApp()).get('/metrics');

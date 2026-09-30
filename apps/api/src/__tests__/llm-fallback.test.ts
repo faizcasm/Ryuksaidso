@@ -29,7 +29,6 @@ describe('FallbackLLMProvider (OmniRoute first, Ollama fallback)', () => {
 
     expect(result.content).toBe('from-ollama');
     expect(provider.lastProvider).toBe('OLLAMA');
-    // OmniRoute was genuinely retried before the fallback answered.
     expect(fetchMock.mock.calls.filter(call => String(call[0]).startsWith(omniUrl)).length).toBe(3);
     expect(fetchMock.mock.calls.some(call => String(call[0]).startsWith(ollamaUrl))).toBe(true);
   }, 20_000);

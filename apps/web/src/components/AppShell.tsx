@@ -54,7 +54,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import icon from "../app/icon.png";
 import { api } from "../lib/api";
-// System RBAC helper (User.userRole ADMIN|USER) — distinct from Membership.role.
 import { isAdmin as isAdminRole } from "../lib/roles";
 
 type User = {
@@ -63,7 +62,6 @@ type User = {
   name: string;
   organizationId: string;
   role: string;
-  /** System RBAC: 'ADMIN' | 'USER' (User.userRole) — gates the Admin tab. */
   userRole?: string;
 };
 type Profile = User & {
@@ -357,10 +355,6 @@ export default function AppShell() {
   });
   const [authError, setAuthError] = useState("");
   const [tab, setTab] = useState("Command Center");
-  // --- toast system ---------------------------------------------------------
-  // `setError` keeps its signature (40+ call sites treat it as "show a toast"),
-  // but every message now auto-dismisses and renders as a modern toast card.
-  // toastSeq bumps even when the same text repeats so the timer re-arms.
   const [error, setErrorRaw] = useState("");
   const [toastKind, setToastKind] = useState<"error" | "success">("error");
   const [toastSeq, setToastSeq] = useState(0);
@@ -377,12 +371,7 @@ export default function AppShell() {
   };
   useEffect(() => {
     if (!error) return;
-    // A fresh toast always starts un-hovered. Closing the previous card via the
-    // × button unmounts it without ever firing mouseleave, which would leave
-    // the hover-ref stuck at true and the auto-dismiss timer paused forever.
     toastHovered.current = false;
-    // Auto-dismiss after 6s; hovering the toast pauses it (checked at fire
-    // time), leaving re-arms a fresh window via the toastSeq bump.
     const timer = setTimeout(() => {
       if (!toastHovered.current) setErrorRaw("");
     }, 6000);
@@ -432,7 +421,6 @@ export default function AppShell() {
     title: "",
     source: "manual",
     content: "",
-    // "" = shared with every agent; otherwise retrieval is scoped to that agent.
     agentId: "",
   });
   const [policyForm, setPolicyForm] = useState({
@@ -487,8 +475,6 @@ export default function AppShell() {
     inviteUrl: string;
     emailSent: boolean;
   } | null>(null);
-  // Sending the invitation email is synchronous server-side and takes a few
-  // seconds — without this flag the button looks dead while SMTP round-trips.
   const [sendingInvite, setSendingInvite] = useState(false);
   const [ticketForm, setTicketForm] = useState({
     title: "",
@@ -641,8 +627,6 @@ export default function AppShell() {
       const [nextRuns, nextApprovals, nextTickets] = await Promise.all([
         api<Run[]>("/control/runs?limit=40"),
         api<Approval[]>("/approvals"),
-        // Ticket threads change while a run is in flight (agent replies land
-        // after approval) — refresh them with the same 5s poll.
         api<Ticket[]>("/tickets").catch(() => tickets),
       ]);
       setRuns(nextRuns);
@@ -667,10 +651,6 @@ export default function AppShell() {
       if (result.user) setUser(result.user);
       localStorage.removeItem("ryuksaidso_invite_token");
     } catch (e) {
-      // A token that can never succeed (expired, revoked, or meant for another
-      // mailbox) must not stay stored — otherwise every later sign-in retries it
-      // and surfaces the same error. Transient failures keep the token so the
-      // join can complete on the next attempt.
       const status = (e as { status?: number })?.status;
       if (status === 400 || status === 403 || status === 404) {
         localStorage.removeItem("ryuksaidso_invite_token");
@@ -688,7 +668,6 @@ export default function AppShell() {
       try {
         const me = await api<{ user: User }>("/me");
         setUser(me.user);
-        // Static tool catalog for the "add tools" section of the agent form.
         void api<ToolMeta[]>("/tools").then(setToolCatalog).catch(() => []);
         await acceptPendingInvitation();
         await Promise.all([
@@ -727,14 +706,9 @@ export default function AppShell() {
     ),
   ]);
   useEffect(() => {
-    // Admin data loads only when the Admin tab actually renders — i.e. for a
-    // system admin (User.userRole=ADMIN), NOT based on the workspace membership
-    // role: a workspace OWNER who is not a system admin never opens this tab.
     if (isAdminRole(user?.userRole) && tab === "Admin") void loadAdmin();
   }, [tab, user]);
   useEffect(() => {
-    // Keep the Admin surface live while it's on screen: soft-poll so charts,
-    // health and audit rows reflect reality without anyone hammering Refresh.
     if (!isAdminRole(user?.userRole) || tab !== "Admin") return;
     const id = window.setInterval(() => {
       if (!document.hidden) void loadAdmin();
@@ -747,8 +721,6 @@ export default function AppShell() {
     setRefreshing(true);
     try {
       await loadCore();
-      // The topbar Refresh used to skip admin data entirely — operators on the
-      // Admin tab were looking at yesterday's numbers after clicking it.
       if (isAdminRole(user?.userRole) && tab === "Admin") await loadAdmin();
     } finally {
       setRefreshing(false);
@@ -814,12 +786,9 @@ export default function AppShell() {
         method: "POST",
         body: JSON.stringify(runForm),
       });
-      // Wait a bit for the job to be properly queued
       await new Promise(resolve => setTimeout(resolve, 500));
-      // Refresh the runs list to show the queued status
       await pollRuns();
       setTab("Traces");
-      // Load the specific run to show in the trace view
       const run = await api<Run>(`/control/runs/${out.runId}`);
       setSelectedRun(run);
       await loadCore();
@@ -905,14 +874,9 @@ export default function AppShell() {
         method: "POST",
         body: JSON.stringify({
           ...agentForm,
-          // Slug must match the API regex; normalize whatever was typed and
-          // fall back to the name so a half-filled form still succeeds.
           slug: toSlug(agentForm.slug || agentForm.name),
           projectId: agentForm.projectId || undefined,
-          // Custom system prompt: when set it overrides Instructions at run time.
           systemPrompt: agentForm.systemPrompt.trim() || undefined,
-          // Tool checkboxes on the create form — an agent with no tools can
-          // never reach the knowledge base or a ticket.
           tools: agentForm.tools.length ? agentForm.tools : ["search_knowledge"],
         }),
       });
@@ -1135,8 +1099,6 @@ export default function AppShell() {
       const out = await api<{ message: string }>("/profile/verify-email", {
         method: "POST",
       });
-      // 202 also covers "SMTP unavailable right now" — only a real send (or an
-      // already-verified account) is a success.
       notify(
         out.message,
         /could not deliver/i.test(out.message) ? "error" : "success",
@@ -1202,21 +1164,12 @@ export default function AppShell() {
     }
   }
 
-  // The /auth route is the sign-in surface; once authenticated, move to the command center.
   useEffect(() => {
     if (user && pathname === "/auth") router.replace("/dashboard");
   }, [user, pathname, router]);
 
-  // Two independent RBAC layers — declared before the loading/auth early
-  // returns so the hook order never changes between the auth screen and the
-  // dashboard:
-  //  - system RBAC    (User.userRole ADMIN|USER)  → Admin tab, matching the API's
-  //    requireAdmin on the platform routes (/admin/users, …);
-  //  - workspace RBAC (Membership OWNER|ADMIN|…)  → invites + member management,
-  //    matching the API's requireRole(['OWNER','ADMIN']).
   const isSystemAdmin = isAdminRole(user?.userRole);
   const canManageWorkspace = user?.role === "OWNER" || user?.role === "ADMIN";
-  // If the system role is revoked while the Admin tab is open, leave it.
   useEffect(() => {
     if (tab === "Admin" && !isSystemAdmin) setTab("Command Center");
   }, [tab, isSystemAdmin]);
@@ -1820,7 +1773,6 @@ function CommandCenter({
   onInspect: (id: string) => void;
   onDecide: (id: string, approved: boolean) => void;
 }) {
-  // --- derived from the live run feed (no extra round-trips) ---------------
   const hourly = useMemo(() => {
     const now = Date.now();
     const buckets = new Array(24).fill(0);
@@ -3670,7 +3622,6 @@ function SettingsView({
       await navigator.clipboard.writeText(url);
       ok = true;
     } catch {
-      /* clipboard permission denied — fall back to a hidden textarea */
     }
     if (!ok) {
       try {
@@ -4203,7 +4154,6 @@ function AdminView({
   onInspect: (id: string) => void;
   updatedAt?: string | null;
 }) {
-  // Hooks first — the loading early-return below must not skip them.
   const [refreshing, setRefreshing] = useState(false);
   const handleRefresh = async () => {
     if (refreshing) return;
@@ -4698,10 +4648,6 @@ function Donut({ value }: { value: number }) {
   );
 }
 
-/**
- * Smooth gradient area chart for trends (tokens/day, signups, hourly runs).
- * Pure SVG — no chart library, scales with the panel, theme-aware via vars.
- */
 function AreaChart({
   values,
   labels,
@@ -4765,9 +4711,6 @@ function AreaChart({
   );
 }
 
-/**
- * Multi-segment donut (provider split, status mix) with a legend.
- */
 function SegmentedDonut({
   segments,
   centerValue,
@@ -4923,11 +4866,6 @@ function readError(e: unknown, fallback: string) {
   }
   return fallback;
 }
-/**
- * Normalize a slug to what the API accepts (`/^[a-z0-9]+(?:-[a-z0-9]+)*$/`):
- * lowercase words joined by single hyphens, capped at the 80-char limit.
- * Keeps the Slug input forgiving — "My Agent!" becomes "my-agent".
- */
 function toSlug(v: string): string {
   return v
     .toLowerCase()

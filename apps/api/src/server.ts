@@ -98,8 +98,6 @@ export function createApp() {
   app.use('/api', approvalRouter);
   app.use('/api', evaluationRouter);
   app.use('/api/admin', adminRouter);
-  // Docs/architecture metadata (static content). Mounted after appRouter so it
-  // inherits the API's blanket requireAuth like every other /api route.
   app.use('/api', docsRouter);
 
   app.use(notFoundHandler);
@@ -111,7 +109,6 @@ if (require.main === module) {
   const app = createApp();
   const server = app.listen(config.API_PORT, '0.0.0.0', () => {
     logger.info(`Ryuksaidso API listening on port ${config.API_PORT}`);
-    // Best-effort SMTP probe: logs clearly whether outbound email can be delivered.
     void verifyEmailTransport();
   });
 

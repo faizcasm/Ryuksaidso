@@ -8,11 +8,6 @@ export function isEmailConfigured(): boolean {
   return Boolean(config.SMTP_HOST && config.EMAIL_FROM);
 }
 
-/**
- * Port 465 is SMTPS: TLS must start before the SMTP greeting. Servers close the
- * socket when a client speaks plaintext on it (surfacing as "Connection closed"),
- * so implicit TLS is derived from the port unless SMTP_SECURE explicitly says otherwise.
- */
 function useSecureTransport(): boolean {
   return config.SMTP_SECURE || config.SMTP_PORT === 465;
 }
@@ -39,18 +34,13 @@ function getTransport(): Transporter {
   return transport;
 }
 
-/** Drops the cached connection so the next send reconnects from scratch. */
 function resetTransport() {
   if (transport) {
-    try { transport.close(); } catch { /* already closed */ }
+    try { transport.close(); } catch {  }
     transport = null;
   }
 }
 
-/**
- * Non-blocking SMTP health probe, used at startup and after failures.
- * Returns true when the server accepts our credentials.
- */
 export async function verifyEmailTransport(): Promise<boolean> {
   if (!isEmailConfigured()) {
     logger.warn('Email delivery is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD and EMAIL_FROM.');
@@ -79,7 +69,6 @@ function errorOf(error: unknown): ErrorLike {
   return (error ?? {}) as ErrorLike;
 }
 
-/** Human-readable, actionable explanation of an SMTP failure. */
 function describeError(error: unknown): string {
   const { code, message = '' } = errorOf(error);
   const first = message.split('\n')[0];
@@ -102,7 +91,7 @@ function describeError(error: unknown): string {
 function isRetriable(error: unknown): boolean {
   const { code } = errorOf(error);
   if (code === 'EAUTH' || code === 'EENVELOPE' || code === 'EMESSAGE') return false;
-  return true; // connection problems and anything unclassified are worth retrying
+  return true;
 }
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -129,7 +118,6 @@ async function sendEmail(to: string, subject: string, text: string, html: string
 
       if (!isRetriable(error) || attempt === MAX_ATTEMPTS) break;
 
-      // Connection-level failures usually mean a half-open socket: rebuild it.
       if (['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ESOCKET'].includes(String(code)) || /closed|timeout/i.test(first)) {
         resetTransport();
       }

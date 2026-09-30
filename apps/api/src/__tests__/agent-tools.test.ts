@@ -47,7 +47,6 @@ describe('tool registry', () => {
       expect(typeof tool.requiresApproval).toBe('boolean');
       expect(typeof tool.execute).toBe('function');
     }
-    // side effects are gated, reads are not
     expect(tools.add_ticket_message.requiresApproval).toBe(true);
     expect(tools.search_knowledge.requiresApproval).toBe(false);
     expect(tools.current_time.requiresApproval).toBe(false);
@@ -56,7 +55,6 @@ describe('tool registry', () => {
   it('merges extra tools (MCP) without clobbering built-ins', () => {
     const merged = buildTools({ prisma: {}, extra: { mcp__github__create_issue: { name: 'mcp__github__create_issue', description: 'x'.repeat(30), category: 'Integrations (MCP)', scope: 'mcp:github', requiresApproval: true, execute: async () => ({ ok: true }) } } });
     expect(Object.keys(merged)).toContain('mcp__github__create_issue');
-    // built-ins survive the merge (registry instances are rebuilt per call)
     expect(merged.search_knowledge).toBeDefined();
     expect(merged.search_knowledge.name).toBe('search_knowledge');
     expect(typeof merged.search_knowledge.execute).toBe('function');

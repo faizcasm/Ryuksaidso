@@ -21,9 +21,6 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['error','warn','info','http','verbose','debug','silly']).default('info'),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(600),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
-  // System RBAC bootstrap: comma-separated emails granted User.userRole=ADMIN
-  // at sign-in/refresh. Empty (default) = nobody is auto-promoted; explicit
-  // grants made through PATCH /admin/users/:id/role remain authoritative.
   SYSTEM_ADMIN_EMAILS: z.string().default('').transform(v => v.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)),
   GOOGLE_CLIENT_ID: z.string().optional(), GOOGLE_CLIENT_SECRET: z.string().optional(), GOOGLE_REDIRECT_URI: z.string().url().optional(),
   GITHUB_CLIENT_ID: z.string().optional(), GITHUB_CLIENT_SECRET: z.string().optional(), GITHUB_REDIRECT_URI: z.string().url().optional(),
@@ -51,9 +48,6 @@ export function providerConfig(provider: LLMProviderName) {
   } catch {
     url = raw.replace(/\/$/, '');
   }
-  // Both gateways serve the OpenAI-compatible API under /v1 (the worker
-  // normalises identically), so a bare origin still resolves to /chat/completions
-  // and /models instead of a 404.
   if (!url.endsWith('/v1')) url = `${url}/v1`;
   return {
     baseUrl: url,

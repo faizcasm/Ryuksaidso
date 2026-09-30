@@ -22,18 +22,11 @@ evaluationRouter.post('/evaluations', async (req, res, next) => {
     if (body.agentId && !agent) return res.status(404).json({ error:'NotFound', message:'Evaluation agent not found' });
     if (body.projectId && !(await prisma.project.findFirst({ where: { id: body.projectId, organizationId: u.organizationId } }))) return res.status(404).json({ error:'NotFound', message:'Evaluation project not found' });
     const organization = await prisma.organization.findUnique({ where: { id: u.organizationId }, select: { llmProvider: true, ollamaModel: true, omnirouteModel: true } });
-    // OmniRoute first, Ollama fallback: if the OmniRoute daemon is down the suite
-    // still runs locally instead of failing every case with a connection error.
-    // Empty OmniRoute model resolves to "auto" (OmniRoute's router default),
-    // matching the worker's providerSettings behaviour.
     const llm = getResilientProvider(['OMNIROUTE', 'OLLAMA'], p =>
       p === 'OMNIROUTE'
         ? (organization?.omnirouteModel || config.OMNIROUTE_MODEL || 'auto')
         : (organization?.ollamaModel || undefined));
-    // Classify against an explicit label set: without it small local models free-associate
-    // ("charge" for billing) and every suite scores 0 even when the agent behaves.
     const labelSet = [...new Set(body.dataset.map(x => x.expectedIntent))];
-    // Evaluate the same persona the agent actually runs with (custom system prompt > instructions).
     const persona = (typeof agent?.systemPrompt === 'string' && agent.systemPrompt.trim()) ? agent.systemPrompt : (agent?.instructions ?? 'Classify the request accurately.');
     const results = [] as Array<{id:string|null;expected:string;predicted:string|null;passed:boolean;error?:string}>;
     for (const item of body.dataset) {
