@@ -129,6 +129,10 @@ chmod 600 ~/.ssh/authorized_keys
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `https://<domain>/api` | Optional; baked into the **web image at build time** as a Docker build-arg. Set it before the first push to `main`, otherwise the image defaults to `http://localhost:4001/api` and the browser will call the wrong origin. |
 
+**Before the secrets exist**
+
+The workflows are safe to run unconfigured: `docker.yml` still builds every image but skips the login and push while `DOCKERHUB_USERNAME` is empty, and `deploy.yml` logs `EC2_HOST is not configured; skipping deployment` and finishes green without touching anything. Each run starts publishing or deploying as soon as its secret is added.
+
 ## 6. First deploy
 
 Two ways:

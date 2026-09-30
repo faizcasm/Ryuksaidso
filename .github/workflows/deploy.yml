@@ -32,8 +32,21 @@ jobs:
       EC2_USER: ${{ secrets.EC2_USER }}
       EC2_PORT: ${{ secrets.EC2_PORT }}
     steps:
+      - name: Check deploy target
+        id: target
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+        run: |
+          if [ -z "$EC2_HOST" ]; then
+            echo "EC2_HOST is not configured; skipping deployment. See docs/PRODUCTION-SETUP.md for the required secrets."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
+        if: steps.target.outputs.skip == 'false'
       - name: Configure SSH
+        if: steps.target.outputs.skip == 'false'
         run: |
           mkdir -p ~/.ssh
           printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
@@ -41,11 +54,13 @@ jobs:
           printf 'Host *\n  StrictHostKeyChecking accept-new\n  UserKnownHostsFile ~/.ssh/known_hosts\n  ConnectTimeout 15\n' > ~/.ssh/config
           ssh-keyscan -p "${EC2_PORT:-22}" "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
       - name: Sync release files to the instance
+        if: steps.target.outputs.skip == 'false'
         run: |
           ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" 'mkdir -p /opt/ryuksaidso'
           tar czf - docker-compose.prod.yml docker-compose.tls.yml infra | \
             ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" 'tar xzf - -C /opt/ryuksaidso'
       - name: Pull, restart and health gate
+        if: steps.target.outputs.skip == 'false'
         run: |
           ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" "bash -s -- '$DEPLOY_TAG'" <<'REMOTE'
           set -euo pipefail

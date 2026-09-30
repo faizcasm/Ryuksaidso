@@ -32,11 +32,24 @@ jobs:
             file: apps/worker/Dockerfile
     steps:
       - uses: actions/checkout@v4
+      - name: Check Docker Hub configuration
+        id: registry
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          if [ -n "$DOCKERHUB_USERNAME" ]; then
+            echo "prefix=${DOCKERHUB_USERNAME}/ryuksaidso-" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prefix=local/ryuksaidso-" >> "$GITHUB_OUTPUT"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "DOCKERHUB_USERNAME and DOCKERHUB_TOKEN are not configured; building images without pushing."
+          fi
       - uses: docker/setup-buildx-action@v3
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/ryuksaidso-${{ matrix.image }}
+          images: ${{ steps.registry.outputs.prefix }}${{ matrix.image }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -44,7 +57,7 @@ jobs:
             type=sha,format=long,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
       - uses: docker/login-action@v3
-        if: github.event_name != 'pull_request'
+        if: steps.registry.outputs.publish == 'true'
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -52,7 +65,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.file }}
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' && steps.registry.outputs.publish == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
