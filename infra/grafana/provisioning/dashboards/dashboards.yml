@@ -1,0 +1,9 @@
+apiVersion: 1
+providers:
+  - name: Ryuksaidso
+    orgId: 1
+    folder: Ryuksaidso
+    type: file
+    disableDeletion: false
+    options:
+      path: /etc/grafana/provisioning/dashboards

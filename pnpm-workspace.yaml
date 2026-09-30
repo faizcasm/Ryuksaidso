@@ -1,0 +1,13 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Dependencies that need their postinstall scripts (prisma engines, esbuild, ...)
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - '@tailwindcss/oxide'
+  - esbuild
+  - msgpackr-extract
+  - prisma
+  - sharp

@@ -1,0 +1,176 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ryuksaidso}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ryuksaidso}
+    ports: ["${POSTGRES_HOST_PORT:-5433}:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    command: redis-server --appendonly yes
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD","redis-cli","ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  # Bridges containers to LLM gateways that only listen on the host loopback
+  # (Ollama binds 127.0.0.1:11434 unless OLLAMA_HOST says otherwise). Host
+  # networking lets it dial 127.0.0.1 while binding on the docker bridge that
+  # `host.docker.internal` resolves to. See infra/llm-proxy.js.
+  llm-proxy:
+    image: node:22-alpine
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      PROXY_MAP: "11435:11434,20129:20128"
+      PROXY_BIND: "172.17.0.1,0.0.0.0"
+      PROXY_TARGET_HOST: "127.0.0.1"
+    volumes: ["./infra/llm-proxy.js:/app/llm-proxy.js:ro"]
+    command: ["node", "/app/llm-proxy.js"]
+
+  migrate:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    command: ["sh", "-c", "for i in $(seq 1 30); do /app/apps/api/node_modules/.bin/prisma migrate deploy && exit 0; echo 'waiting for postgres...'; sleep 2; done; exit 1"]
+    environment:
+      NODE_ENV: production
+      APP_NAME: ${APP_NAME:-ryuksaidso}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ryuksaidso}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ryuksaidso}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in your environment}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      OMNIROUTE_URL: ${OMNIROUTE_URL_DOCKER:-http://host.docker.internal:20129/v1}
+      OMNIROUTE_API: ${OMNIROUTE_API:-}
+      OMNIROUTE_MODEL: ${OMNIROUTE_MODEL:-}
+      # host loopback is unreachable from containers -> llm-proxy forwards these
+      OLLAMA_URL: ${OLLAMA_URL_DOCKER:-http://host.docker.internal:11435/v1}
+      OLLAMA_API: ${OLLAMA_API:-ollama}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b-instruct-q4_K_M}
+      DOCKER_RUNTIME: "true"
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    environment:
+      NODE_ENV: production
+      APP_NAME: ${APP_NAME:-ryuksaidso}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ryuksaidso}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ryuksaidso}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in your environment}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      API_PORT: 4001
+      OMNIROUTE_URL: ${OMNIROUTE_URL_DOCKER:-http://host.docker.internal:20129/v1}
+      OMNIROUTE_API: ${OMNIROUTE_API:-}
+      OMNIROUTE_MODEL: ${OMNIROUTE_MODEL:-}
+      # host loopback is unreachable from containers -> llm-proxy forwards these
+      OLLAMA_URL: ${OLLAMA_URL_DOCKER:-http://host.docker.internal:11435/v1}
+      OLLAMA_API: ${OLLAMA_API:-ollama}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b-instruct-q4_K_M}
+      DOCKER_RUNTIME: "true"
+      COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:4001/api/auth/oauth/google/callback}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-http://localhost:4001/api/auth/oauth/github/callback}
+      # Agent tool integrations
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      MCP_SERVERS: ${MCP_SERVERS:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      # System RBAC bootstrap: emails granted User.userRole=ADMIN at sign-in
+      SYSTEM_ADMIN_EMAILS: ${SYSTEM_ADMIN_EMAILS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-600}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports: ["4001:4001"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4001/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      llm-proxy: { condition: service_started }
+  worker:
+    build: { context: ., dockerfile: apps/worker/Dockerfile }
+    environment:
+      NODE_ENV: production
+      APP_NAME: ${APP_NAME:-ryuksaidso}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ryuksaidso}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ryuksaidso}
+      REDIS_URL: redis://redis:6379
+      OMNIROUTE_URL: ${OMNIROUTE_URL_DOCKER:-http://host.docker.internal:20129/v1}
+      OMNIROUTE_API: ${OMNIROUTE_API:-}
+      OMNIROUTE_MODEL: ${OMNIROUTE_MODEL:-}
+      # host loopback is unreachable from containers -> llm-proxy forwards these
+      OLLAMA_URL: ${OLLAMA_URL_DOCKER:-http://host.docker.internal:11435/v1}
+      OLLAMA_API: ${OLLAMA_API:-ollama}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b-instruct-q4_K_M}
+      DOCKER_RUNTIME: "true"
+      WORKER_CONCURRENCY: 4
+      # Agent tool integrations (GitHub + MCP)
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      MCP_SERVERS: ${MCP_SERVERS:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      llm-proxy: { condition: service_started }
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4001/api}
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:4001/api
+    ports: ["3000:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    volumes: ["./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["9090:9090"]
+    depends_on: [api]
+  loki:
+    image: grafana/loki:3.5.5
+    command: -config.file=/etc/loki/config.yml
+    volumes: ["./infra/loki/config.yml:/etc/loki/config.yml:ro","loki_data:/loki"]
+    ports: ["3100:3100"]
+  promtail:
+    image: grafana/promtail:3.5.5
+    command: -config.file=/etc/promtail/config.yml
+    volumes: ["./infra/promtail/config.yml:/etc/promtail/config.yml:ro","/var/lib/docker/containers:/var/lib/docker/containers:ro","/var/run/docker.sock:/var/run/docker.sock:ro"]
+    depends_on: [loki]
+  grafana:
+    image: grafana/grafana:12.1.1
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes: ["grafana_data:/var/lib/grafana","./infra/grafana/provisioning:/etc/grafana/provisioning:ro"]
+    ports: ["3001:3000"]
+    depends_on: [prometheus,loki]
+volumes:
+  postgres_data: {}
+  redis_data: {}
+  grafana_data: {}
+  loki_data: {}

@@ -1,0 +1,25 @@
+{
+  "name": "@ryuksaidso/worker",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "echo \"worker integration tests require Redis/Postgres; covered by end-to-end stack CI\""
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.0",
+    "bullmq": "5.56.2",
+    "ioredis": "5.7.0",
+    "pino": "9.9.4",
+    "@ryuksaidso/agent-runtime": "workspace:*",
+    "@ryuksaidso/agent-tools": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "24.5.2",
+    "tsx": "4.20.5",
+    "typescript": "5.9.2"
+  }
+}

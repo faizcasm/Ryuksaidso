@@ -1,0 +1,423 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  AGENT
+  VIEWER
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum RunStatus {
+  QUEUED
+  RUNNING
+  WAITING_APPROVAL
+  COMPLETED
+  FAILED
+}
+
+enum MemoryKind {
+  EPISODIC
+  SEMANTIC
+}
+
+enum LLMProvider {
+  OLLAMA
+  OMNIROUTE
+}
+
+enum ProjectStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+model Organization {
+  id String @id @default(cuid())
+  name String
+  members Membership[]
+  tickets Ticket[]
+  projects Project[]
+  agents Agent[]
+  documents Document[]
+  runs AgentRun[]
+  approvals Approval[]
+  evaluations Evaluation[]
+  memories Memory[]
+  apiKeys ApiKey[]
+  policies Policy[]
+  sessions Session[]
+  invitations WorkspaceInvitation[]
+  llmProvider LLMProvider @default(OLLAMA)
+  // Must match an image that actually exists locally — see OLLAMA_MODEL in .env
+  // and migration 20260926150000_set_ollama_model_default.
+  ollamaModel String @default("qwen2.5-coder:3b-instruct-q4_K_M")
+  omnirouteModel String @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  name String
+  passwordHash String?
+  emailVerifiedAt DateTime?
+  userRole UserRole @default(USER)
+  memberships Membership[]
+  oauthAccounts OAuthAccount[]
+  sessions Session[]
+  passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  bio String?
+  jobTitle String?
+  avatarUrl String?
+  timezone String?
+  theme String @default("system")
+}
+
+model Membership {
+  id String @id @default(cuid())
+  role Role @default(VIEWER)
+  userId String
+  organizationId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  @@unique([userId,organizationId])
+}
+
+model OAuthAccount {
+  id String @id @default(cuid())
+  provider String
+  providerAccountId String
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([provider,providerAccountId])
+  @@index([userId,provider])
+}
+
+model Session {
+  id String @id @default(cuid())
+  userId String
+  organizationId String?
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  organization Organization? @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  createdAt DateTime @default(now())
+  @@unique([tokenHash])
+  @@index([userId,expiresAt])
+  @@index([organizationId,expiresAt])
+}
+
+model Project {
+  id String @id @default(cuid())
+  organizationId String
+  name String
+  slug String
+  description String
+  status ProjectStatus @default(ACTIVE)
+  productionVersion String?
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  agents Agent[]
+  runs AgentRun[]
+  evaluations Evaluation[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([organizationId,slug])
+  @@index([organizationId,status])
+}
+
+model Agent {
+  id String @id @default(cuid())
+  organizationId String
+  projectId String?
+  name String
+  slug String
+  instructions String
+  /** Optional custom system prompt; overrides `instructions` at run time. */
+  systemPrompt String?
+  enabled Boolean @default(true)
+  tools Json?
+  documents Document[]
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  project Project? @relation(fields:[projectId],references:[id],onDelete:SetNull)
+  versions AgentVersion[]
+  runs AgentRun[]
+  evaluations Evaluation[]
+  @@unique([organizationId,slug])
+  @@index([organizationId,projectId])
+}
+
+model AgentVersion {
+  id String @id @default(cuid())
+  agentId String
+  version Int
+  config Json
+  changelog String?
+  createdBy String?
+  publishedAt DateTime?
+  createdAt DateTime @default(now())
+  agent Agent @relation(fields:[agentId],references:[id],onDelete:Cascade)
+  runs AgentRun[]
+  @@unique([agentId,version])
+  @@index([agentId,createdAt])
+}
+
+model Ticket {
+  id             String       @id @default(cuid())
+  organizationId String
+  title          String
+  description    String
+  status         TicketStatus @default(OPEN)
+  priority       Priority     @default(MEDIUM)
+  requesterEmail String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages       Message[]
+  runs           AgentRun[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, status])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  ticketId String
+  role      String
+  content   String
+  metadata  Json?
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
+}
+model AgentRun {
+  id String @id @default(cuid())
+  organizationId String
+  projectId String?
+  ticketId String?
+  agentId String?
+  agentVersionId String?
+  status RunStatus @default(QUEUED)
+  provider LLMProvider @default(OLLAMA)
+  trigger String @default("playground")
+  environment String @default("development")
+  input Json
+  output Json?
+  error String?
+  tokenUsage Int @default(0)
+  latencyMs Int?
+  startedAt DateTime?
+  finishedAt DateTime?
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  project Project? @relation(fields:[projectId],references:[id],onDelete:SetNull)
+  ticket Ticket? @relation(fields:[ticketId],references:[id],onDelete:SetNull)
+  agent Agent? @relation(fields:[agentId],references:[id],onDelete:SetNull)
+  agentVersion AgentVersion? @relation(fields:[agentVersionId],references:[id],onDelete:SetNull)
+  steps AgentStep[]
+  approvals Approval[]
+  createdAt DateTime @default(now())
+  @@index([organizationId,status,createdAt])
+  @@index([organizationId,projectId,createdAt])
+  @@index([agentId,createdAt])
+}
+
+model AgentStep {
+  id String @id @default(cuid())
+  runId String
+  stepIndex Int
+  agent String
+  action String
+  status String
+  input Json?
+  output Json?
+  durationMs Int?
+  tokens Int @default(0)
+  error String?
+  run AgentRun @relation(fields:[runId],references:[id],onDelete:Cascade)
+  createdAt DateTime @default(now())
+  @@index([runId,stepIndex])
+}
+
+model Document {
+  id String @id @default(cuid())
+  organizationId String
+  title String
+  source String
+  content String
+  metadata Json?
+  // Optional knowledge scope: NULL = shared with every agent in the workspace,
+  // otherwise only that agent (and shared docs) retrieve it.
+  agentId String?
+  chunks DocumentChunk[]
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  agent Agent? @relation(fields:[agentId],references:[id],onDelete:SetNull)
+  createdAt DateTime @default(now())
+  @@index([organizationId,createdAt])
+  @@index([organizationId,agentId])
+}
+
+model DocumentChunk {
+  id String @id @default(cuid())
+  documentId String
+  content String
+  embedding Unsupported("vector(1536)")?
+  metadata Json?
+  document Document @relation(fields:[documentId],references:[id],onDelete:Cascade)
+  @@index([documentId])
+}
+
+model Memory {
+  id String @id @default(cuid())
+  organizationId String
+  kind MemoryKind
+  content String
+  metadata Json?
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  createdAt DateTime @default(now())
+  @@index([organizationId,kind])
+}
+
+model Approval {
+  id String @id @default(cuid())
+  organizationId String
+  runId String
+  action String
+  payload Json
+  status String @default("PENDING")
+  decidedBy String?
+  decidedAt DateTime?
+  createdAt DateTime @default(now())
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  run AgentRun @relation(fields:[runId],references:[id],onDelete:Cascade)
+  @@index([organizationId,status])
+}
+
+model Policy {
+  id String @id @default(cuid())
+  organizationId String
+  name String
+  description String
+  action String
+  enabled Boolean @default(true)
+  requiresApproval Boolean @default(false)
+  severity String @default("medium")
+  conditions Json?
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([organizationId,name])
+  @@index([organizationId,enabled])
+}
+
+model Evaluation {
+  id String @id @default(cuid())
+  organizationId String
+  projectId String?
+  agentId String?
+  name String
+  dataset Json
+  results Json?
+  createdAt DateTime @default(now())
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  project Project? @relation(fields:[projectId],references:[id],onDelete:SetNull)
+  agent Agent? @relation(fields:[agentId],references:[id],onDelete:SetNull)
+  @@index([organizationId,createdAt])
+}
+
+model ApiKey {
+  id String @id @default(cuid())
+  organizationId String
+  name String
+  prefix String
+  secretHash String
+  lastUsedAt DateTime?
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  createdAt DateTime @default(now())
+  @@unique([organizationId,name])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  organizationId String?
+  userId String?
+  action String
+  resource String
+  resourceId String?
+  metadata Json?
+  createdAt DateTime @default(now())
+  @@index([organizationId,createdAt])
+}
+
+
+
+model WorkspaceInvitation {
+  id String @id @default(cuid())
+  organizationId String
+  email String
+  role Role @default(VIEWER)
+  tokenHash String @unique
+  invitedBy String?
+  expiresAt DateTime
+  acceptedAt DateTime?
+  createdAt DateTime @default(now())
+  organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
+  @@index([organizationId,email,acceptedAt])
+  @@index([email,acceptedAt])
+}
+
+model EmailVerificationToken {
+  id String @id @default(cuid())
+  userId String
+  tokenHash String @unique
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@index([userId,expiresAt])
+}
+
+model PasswordResetToken {
+  id String @id @default(cuid())
+  userId String
+  tokenHash String @unique
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  @@index([userId, expiresAt])
+}
