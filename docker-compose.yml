@@ -72,6 +72,7 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b-instruct-q4_K_M}
       DOCKER_RUNTIME: "true"
       COOKIE_SAME_SITE: ${COOKIE_SAME_SITE:-lax}
+      COOKIE_SECURE: ${COOKIE_SECURE:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:4001/api/auth/oauth/google/callback}

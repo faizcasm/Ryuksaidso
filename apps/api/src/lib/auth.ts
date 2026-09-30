@@ -12,11 +12,11 @@ const REFRESH_COOKIE = 'ryuksaidso_refresh';
 const CSRF_COOKIE = 'ryuksaidso_csrf';
 
 export function cookieOptions(maxAge: number) {
-  return { httpOnly: true, secure: config.NODE_ENV === 'production', sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none', path: '/', maxAge } as const;
+  return { httpOnly: true, secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none', path: '/', maxAge } as const;
 }
 
 export function csrfCookieOptions() {
-  return { httpOnly: false, secure: config.NODE_ENV === 'production', sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none', path: '/', maxAge: 86_400_000 } as const;
+  return { httpOnly: false, secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none', path: '/', maxAge: 86_400_000 } as const;
 }
 
 type CookieFn = (...args: any[]) => any;
@@ -27,7 +27,7 @@ export function setCsrfCookie(res: { cookie: CookieFn }, token = crypto.randomBy
 }
 
 export function clearAuthCookies(res: { clearCookie: CookieFn }) {
-  const base = { secure: config.NODE_ENV === 'production', sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none' } as const;
+  const base = { secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none' } as const;
   res.clearCookie(ACCESS_COOKIE, { ...base, httpOnly: true, path: '/' });
   res.clearCookie(REFRESH_COOKIE, { ...base, httpOnly: true, path: '/api' });
   res.clearCookie(REFRESH_COOKIE, { ...base, httpOnly: true, path: '/api/auth' });
@@ -35,7 +35,7 @@ export function clearAuthCookies(res: { clearCookie: CookieFn }) {
 }
 
 export function setSessionCookies(res: { cookie: CookieFn; clearCookie: CookieFn }, accessToken: string, refreshToken: string) {
-  const base = { secure: config.NODE_ENV === 'production', sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none', httpOnly: true } as const;
+  const base = { secure: config.COOKIE_SECURE, sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none', httpOnly: true } as const;
   res.clearCookie(REFRESH_COOKIE, { ...base, path: '/api/auth' });
   res.cookie(ACCESS_COOKIE, accessToken, { ...base, path: '/', maxAge: 15 * 60 * 1000 });
   res.cookie(REFRESH_COOKIE, refreshToken, { ...base, path: '/api', maxAge: config.REFRESH_TOKEN_TTL_MS });

@@ -96,3 +96,31 @@ describe('production safety checks', () => {
     await expect(loadConfig({ REDIS_URL: 'not-a-url' })).rejects.toThrow(ZodError);
   });
 });
+
+describe('cookie secure flag', () => {
+  const prod = { NODE_ENV: 'production', JWT_SECRET: 'x'.repeat(48) };
+
+  it('is false for a plain http frontend so login works without TLS', async () => {
+    const { config } = await loadConfig({ ...prod, FRONTEND_URL: 'http://example.com' });
+    expect(config.COOKIE_SECURE).toBe(false);
+  });
+
+  it('is true for an https frontend', async () => {
+    const { config } = await loadConfig({ ...prod, FRONTEND_URL: 'https://example.com' });
+    expect(config.COOKIE_SECURE).toBe(true);
+  });
+
+  it('honours an explicit COOKIE_SECURE override', async () => {
+    const { config } = await loadConfig({ ...prod, FRONTEND_URL: 'https://example.com', COOKIE_SECURE: 'false' });
+    expect(config.COOKIE_SECURE).toBe(false);
+  });
+
+  it('treats an empty COOKIE_SECURE as unset', async () => {
+    const { config } = await loadConfig({ ...prod, COOKIE_SECURE: '' });
+    expect(config.COOKIE_SECURE).toBe(false);
+  });
+
+  it('rejects a malformed COOKIE_SECURE value', async () => {
+    await expect(loadConfig({ ...prod, COOKIE_SECURE: 'yes' })).rejects.toThrow(ZodError);
+  });
+});

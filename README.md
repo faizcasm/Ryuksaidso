@@ -111,7 +111,7 @@ OAuth callbacks for local clients: `http://localhost:4001/api/auth/oauth/google/
 
 ## Environment variables
 
-`.env.example` is the complete annotated template for local development (application URLs, Postgres, Redis, API/CORS, JWT/session TTLs, LLM providers, OAuth, agent tools, SMTP, worker, observability, feature flags). `.env.production.example` is the server-side template used by `docker-compose.prod.yml` on the instance (`/opt/ryuksaidso/.env.production`).
+`.env.example` is the complete annotated template for local development (application URLs, Postgres, Redis, API/CORS, JWT/session TTLs, LLM providers, OAuth, agent tools, SMTP, worker, observability, feature flags). `.env.production.example` is the server-side template used by `docker-compose.prod.yml` on the instance (copy it to `/opt/ryuksaidso/.env`, which is the name compose reads).
 
 Key variables:
 
@@ -119,6 +119,7 @@ Key variables:
 |---|---|
 | `POSTGRES_PASSWORD`, `JWT_SECRET` | Required secrets; production compose refuses to start without them |
 | `CORS_ORIGIN`, `FRONTEND_URL` | Allowed origin and UI base URL (comma-separated origins supported) |
+| `COOKIE_SAME_SITE`, `COOKIE_SECURE` | Cookie policy; `COOKIE_SECURE` defaults to whether `FRONTEND_URL` is `https://`, so plain-HTTP deployments still log in |
 | `DOMAIN`, `CERT_NAME` | TLS overlay (`docker-compose.tls.yml`) certificate names |
 | `DOCKERHUB_USERNAME`, `IMAGE_TAG` | Image coordinates for the production compose files |
 | `API_REPLICAS`, `WORKER_REPLICAS`, `WORKER_CONCURRENCY` | Horizontal scaling of API/worker containers |

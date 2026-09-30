@@ -12,6 +12,7 @@ const envSchema = z.object({
   ACCESS_TOKEN_TTL: z.string().default('15m'),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).max(90).default(30),
   COOKIE_SAME_SITE: z.enum(['lax','strict','none']).default('lax'),
+  COOKIE_SECURE: z.preprocess(v => (v === undefined || v === '' ? undefined : v), z.enum(['true','false']).optional()),
   OMNIROUTE_URL: z.string().url().default('http://localhost:20128/v1'),
   OMNIROUTE_API: z.string().default(''),
   OMNIROUTE_MODEL: z.string().default(''),
@@ -34,7 +35,11 @@ const envSchema = z.object({
 });
 
 const parsed = envSchema.parse(process.env);
-export const config = { ...parsed, REFRESH_TOKEN_TTL_MS: parsed.REFRESH_TOKEN_TTL_DAYS * 86_400_000 };
+export const config = {
+  ...parsed,
+  REFRESH_TOKEN_TTL_MS: parsed.REFRESH_TOKEN_TTL_DAYS * 86_400_000,
+  COOKIE_SECURE: parsed.COOKIE_SECURE === undefined ? parsed.FRONTEND_URL.startsWith('https://') : parsed.COOKIE_SECURE === 'true',
+};
 
 export type LLMProviderName = 'OLLAMA' | 'OMNIROUTE';
 

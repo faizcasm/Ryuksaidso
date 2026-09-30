@@ -82,6 +82,8 @@ CERT_NAME=app.example.com
 SYSTEM_ADMIN_EMAILS=you@example.com              # bootstraps the first system admin
 ```
 
+> **No domain yet?** Run plain HTTP: set `CORS_ORIGIN=http://<instance-ip>` and `FRONTEND_URL=http://<instance-ip>`. Session cookies follow the frontend protocol automatically — `COOKIE_SECURE` defaults to "is `FRONTEND_URL` https" and can be forced with `COOKIE_SECURE=true|false` — so login works without TLS. Leave `DOMAIN`/`CERT_NAME` as placeholders until DNS points at the instance, then follow section 8. On a 1 GB instance also set `API_REPLICAS=1`.
+
 Optional: `OMNIROUTE_URL` / `OMNIROUTE_API` / `OMNIROUTE_MODEL` and `OLLAMA_*` (defaults point at the `llm-proxy` forwarder: `:11435 → 127.0.0.1:11434` for Ollama, `:20129 → 127.0.0.1:20128` for OmniRoute), SMTP variables for real email delivery, OAuth client credentials (callback URLs: `https://<domain>/api/auth/oauth/google/callback` and `.../github/callback`).
 
 Upload it to the instance — **compose reads `.env` from the project directory**, so place it as `/opt/ryuksaidso/.env`:
