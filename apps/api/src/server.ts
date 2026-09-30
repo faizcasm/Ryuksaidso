@@ -22,6 +22,16 @@ import { docsRouter } from './routes/docs';
 import { requestId, csrfProtection } from './middleware';
 import { errorHandler, notFoundHandler } from './middleware-error';
 
+function bounded<T>(fn: () => Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timed out after ${ms}ms`)), ms);
+    fn().then(
+      value => { clearTimeout(timer); resolve(value); },
+      error => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
+
 export function createApp() {
   const app = express();
 
@@ -64,8 +74,8 @@ export function createApp() {
 
   app.get('/ready', async (_req, res, next) => {
     try {
-      await prisma.$queryRaw`SELECT 1`;
-      await redis.ping();
+      await bounded(() => prisma.$queryRaw`SELECT 1`, 2000);
+      await bounded(() => redis.ping(), 2000);
       const checks = await Promise.all((['OLLAMA','OMNIROUTE'] as const).map(async provider => {
         const model = provider === 'OLLAMA' ? config.OLLAMA_MODEL : config.OMNIROUTE_MODEL;
         if (!model && provider === 'OMNIROUTE') return { provider, ok: false, reason: 'model not configured' };

@@ -79,15 +79,22 @@ export function buildTools(deps: BuildToolsDeps): Record<string, ToolDef> {
       category: 'Tickets',
       scope: 'ticket:write',
       requiresApproval: true,
-      execute: async (input, ctx) =>
-        prisma.message.create({
+      execute: async (input, ctx) => {
+        const ticketId = String(input.ticketId ?? '');
+        const ticket = await prisma.ticket.findFirst({
+          where: { id: ticketId, organizationId: ctx.user.organizationId },
+          select: { id: true },
+        });
+        if (!ticket) throw new Error('Ticket not found');
+        return prisma.message.create({
           data: {
-            ticketId: String(input.ticketId ?? ''),
+            ticketId: ticket.id,
             role: 'assistant',
             content: String(input.content ?? input.prompt ?? ''),
             metadata: { runId: ctx.runId },
           },
-        }),
+        });
+      },
     },
     current_time: { ...currentTimeTool, execute: currentTimeTool.execute as ToolDef['execute'] },
     calculator: {

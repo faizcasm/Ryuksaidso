@@ -196,7 +196,11 @@ worker.on('error', error => logger.error({ error: error.message }, 'worker error
 
 const shutdown = async (signal: string) => {
   logger.info({ signal }, 'shutting down worker');
-  await worker.close();
+  try {
+    await worker.close();
+  } catch (error) {
+    logger.error({ signal, error: error instanceof Error ? error.message : String(error) }, 'worker close failed');
+  }
   await Promise.allSettled([redis.quit(), prisma.$disconnect()]);
   process.exit(0);
 };

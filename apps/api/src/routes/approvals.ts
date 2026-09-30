@@ -28,7 +28,12 @@ approvalRouter.post('/approvals/:id/decision', async (req, res) => {
     return;
   }
   const status = body.approved ? 'APPROVED' : 'REJECTED';
-  const result = await prisma.approval.update({ where: { id: approval.id }, data: { status, decidedBy: u.id, decidedAt: new Date() } });
+  const claimed = await prisma.approval.updateMany({ where: { id: approval.id, status: 'PENDING' }, data: { status, decidedBy: u.id, decidedAt: new Date() } });
+  if (claimed.count !== 1) {
+    res.status(404).json({ error: 'NotFound', message: 'Pending approval not found' });
+    return;
+  }
+  const result = await prisma.approval.findUnique({ where: { id: approval.id } });
   if (body.approved) {
     const sourceRun = await prisma.agentRun.findFirst({ where: { id: approval.runId, organizationId: u.organizationId } });
     if (sourceRun) {

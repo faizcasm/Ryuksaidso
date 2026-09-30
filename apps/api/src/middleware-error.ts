@@ -6,12 +6,22 @@ export const notFoundHandler = (req: import('express').Request, res: import('exp
   res.status(404).json({ error: 'NotFound', message: `Route ${req.method} ${req.path} not found` });
 };
 
-export const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
+
   if (err instanceof ZodError) {
     const detail = err.issues
       .map(i => `${i.path.length ? i.path.join('.') : 'body'}: ${i.message}`)
       .join('; ');
     res.status(400).json({ error: 'ValidationError', message: detail || 'Request validation failed', issues: err.issues });
+    return;
+  }
+
+  if (err?.code === 'P2002') {
+    res.status(409).json({ error: 'Conflict', message: 'A record with this value already exists' });
     return;
   }
 

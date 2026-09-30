@@ -36,7 +36,12 @@ async function request<T>(path: string, options: RequestInit = {}, retried = fal
   }
   if (!res.ok) {
     const text = await res.text();
-    const error = new Error(text) as Error & { status?: number };
+    let message = text;
+    try {
+      const parsed = JSON.parse(text) as { message?: unknown };
+      if (typeof parsed.message === 'string' && parsed.message.trim()) message = parsed.message;
+    } catch {}
+    const error = new Error(message) as Error & { status?: number };
     error.status = res.status;
     throw error;
   }

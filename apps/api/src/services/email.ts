@@ -150,12 +150,20 @@ export async function sendVerificationEmail(to: string, verifyUrl: string) {
   logger.info('Verification email sent', { to, event: 'verification_email_sent' });
 }
 
+const HTML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, character => HTML_ESCAPES[character]);
+}
+
 export async function sendWorkspaceInvitationEmail(to: string, workspaceName: string, role: string, inviteUrl: string) {
+  const safeName = escapeHtml(workspaceName);
+  const safeRole = escapeHtml(role);
   await sendEmail(
     to,
     `You have been invited to ${workspaceName}`,
     `You have been invited to join ${workspaceName} on ${config.APP_NAME} as ${role}.\n\nAccept the invitation: ${inviteUrl}\n\nThis invitation expires in 7 days.`,
-    `<div style="font-family:Arial,sans-serif;max-width:640px;margin:auto"><h2>Join ${workspaceName}</h2><p>You were invited to join this workspace as <b>${role}</b>.</p><p><a href="${inviteUrl}" style="display:inline-block;padding:12px 18px;border-radius:8px;background:#7c3aed;color:#fff;text-decoration:none">Accept invitation</a></p><p>This invitation expires in 7 days.</p></div>`
+    `<div style="font-family:Arial,sans-serif;max-width:640px;margin:auto"><h2>Join ${safeName}</h2><p>You were invited to join this workspace as <b>${safeRole}</b>.</p><p><a href="${escapeHtml(inviteUrl)}" style="display:inline-block;padding:12px 18px;border-radius:8px;background:#7c3aed;color:#fff;text-decoration:none">Accept invitation</a></p><p>This invitation expires in 7 days.</p></div>`
   );
   logger.info('Workspace invitation sent', { to, workspaceName, role, event: 'workspace_invitation_sent' });
 }

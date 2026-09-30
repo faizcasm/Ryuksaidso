@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware';
 import { prisma } from '../lib/db';
+import { agentRuns } from '../lib/metrics';
 import { audit, type AuthUser } from '../lib/auth';
 import { enqueueRun } from '../services/queue';
 import {
@@ -14,7 +15,7 @@ import {
   updatePolicySchema,
   updateProjectSchema,
 } from '../validation';
-import type { Prisma } from '@prisma/client';
+import { RunStatus, type Prisma } from '@prisma/client';
 
 export const controlRouter = Router();
 
@@ -39,6 +40,18 @@ function requireRole(u: AuthUser, roles: string[]) {
 
 function json(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+async function failUnqueuedRun(runId: string, error: unknown): Promise<never> {
+  const reason = error instanceof Error ? error.message : String(error);
+  await prisma.agentRun
+    .update({
+      where: { id: runId },
+      data: { status: 'FAILED', error: `Failed to queue run: ${reason}`.slice(0, 500) },
+    })
+    .catch(() => undefined);
+  agentRuns.inc({ status: 'failed' });
+  throw Object.assign(new Error('Failed to queue run for execution'), { statusCode: 503, cause: error });
 }
 
 
@@ -555,51 +568,59 @@ controlRouter.post(
         });
       }
 
-      const latest =
-        await prisma.agentVersion.findFirst({
-          where: {
-            agentId: agent.id,
-          },
-          orderBy: {
-            version: 'desc',
-          },
-        });
+      const version = await prisma.$transaction(
+        async tx => {
+          await tx.$queryRaw`SELECT id FROM "Agent" WHERE id = ${agent.id} FOR UPDATE`;
 
-      const version =
-        await prisma.agentVersion.create({
-          data: {
-            agentId: agent.id,
-            version: (latest?.version ?? 0) + 1,
-
-            config: json(
-              body.config ?? {
-                instructions: agent.instructions,
-                tools: agent.tools ?? [],
+          const latest =
+            await tx.agentVersion.findFirst({
+              where: {
+                agentId: agent.id,
               },
-            ),
+              orderBy: {
+                version: 'desc',
+              },
+            });
 
-            createdBy: u.id,
-            changelog: body.changelog,
-            publishedAt: body.publish
-              ? new Date()
-              : null,
-          },
-        });
+          const created =
+            await tx.agentVersion.create({
+              data: {
+                agentId: agent.id,
+                version: (latest?.version ?? 0) + 1,
 
-      if (
-        body.publish &&
-        agent.projectId
-      ) {
-        await prisma.project.update({
-          where: {
-            id: agent.projectId,
-          },
-          data: {
-            productionVersion:
-              `${agent.slug}@v${version.version}`,
-          },
-        });
-      }
+                config: json(
+                  body.config ?? {
+                    instructions: agent.instructions,
+                    tools: agent.tools ?? [],
+                  },
+                ),
+
+                createdBy: u.id,
+                changelog: body.changelog,
+                publishedAt: body.publish
+                  ? new Date()
+                  : null,
+              },
+            });
+
+          if (
+            body.publish &&
+            agent.projectId
+          ) {
+            await tx.project.update({
+              where: {
+                id: agent.projectId,
+              },
+              data: {
+                productionVersion:
+                  `${agent.slug}@v${created.version}`,
+              },
+            });
+          }
+
+          return created;
+        },
+      );
 
       await audit(
         u,
@@ -639,6 +660,12 @@ controlRouter.get('/runs', async (req, res) => {
   if (
     typeof req.query.status === 'string'
   ) {
+    if (!Object.values(RunStatus).includes(req.query.status as RunStatus)) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: `Invalid status. Expected one of: ${Object.values(RunStatus).join(', ')}`,
+      });
+    }
     where.status = req.query.status;
   }
 
@@ -794,6 +821,23 @@ controlRouter.post(
         });
       }
 
+      if (body.projectId) {
+        const project =
+          await prisma.project.findFirst({
+            where: {
+              id: body.projectId,
+              organizationId: u.organizationId,
+            },
+          });
+
+        if (!project) {
+          return res.status(404).json({
+            error: 'NotFound',
+            message: 'Project not found',
+          });
+        }
+      }
+
       const projectId =
         body.projectId ?? agent.projectId;
 
@@ -841,12 +885,17 @@ controlRouter.post(
           },
         });
 
-      const job =
-        await enqueueRun(
+      let job: Awaited<ReturnType<typeof enqueueRun>>;
+      try {
+        job = await enqueueRun(
           run.id,
           u.organizationId,
           u,
         );
+      } catch (error) {
+        await failUnqueuedRun(run.id, error);
+        return;
+      }
 
       await audit(
         u,
@@ -927,11 +976,16 @@ controlRouter.post(
           },
         });
 
-      await enqueueRun(
-        retried.id,
-        u.organizationId,
-        u,
-      );
+      try {
+        await enqueueRun(
+          retried.id,
+          u.organizationId,
+          u,
+        );
+      } catch (error) {
+        await failUnqueuedRun(retried.id, error);
+        return;
+      }
 
       await audit(
         u,

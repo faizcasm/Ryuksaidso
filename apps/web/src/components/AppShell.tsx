@@ -35,7 +35,6 @@ import {
   Plus,
   RefreshCw,
   Rocket,
-  Search,
   Settings2,
   Shield,
   ShieldCheck,
@@ -722,6 +721,8 @@ export default function AppShell() {
     try {
       await loadCore();
       if (isAdminRole(user?.userRole) && tab === "Admin") await loadAdmin();
+    } catch (e) {
+      setError(readError(e, "Could not refresh data"));
     } finally {
       setRefreshing(false);
     }
@@ -1197,7 +1198,6 @@ export default function AppShell() {
       />
     );
 
-  const isOwner = user.role === "OWNER";
   const selectedAgent = agents.find((a) => a.id === runForm.agentId);
   const nav = [
     ...mainNav,
@@ -2181,10 +2181,6 @@ function RunLab({
                   (p) => p.provider === form.provider,
                 )?.selectedModel || ""
               }
-              onChange={(e) => {
-                const val = e.target.value;
-                setForm({ ...form });
-              }}
               placeholder="Configured in Settings"
               readOnly
             />
@@ -4176,7 +4172,6 @@ function AdminView({
   const max = Math.max(1, ...data.series.map((x) => x.runs));
   const maxTokens = Math.max(1, ...data.series.map((x) => x.tokens));
   const registrationDaily = data.registrations?.daily ?? [];
-  const maxNew = Math.max(1, ...registrationDaily.map((x) => x.new));
   const memberBaseline = data.registrations?.beforeWindow ?? 0;
   const cumulativeMembers = registrationDaily.reduce<number[]>(
     (acc, day, i) => [...acc, (i ? acc[i - 1] : memberBaseline) + day.new],

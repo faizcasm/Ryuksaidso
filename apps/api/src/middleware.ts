@@ -3,13 +3,20 @@ import type { NextFunction, Request, Response } from 'express';
 import { verifyToken, ACCESS_COOKIE, CSRF_COOKIE, type AuthUser } from './lib/auth';
 import { prisma } from './lib/db';
 
-export type AuthenticatedRequest = Request & { user?: AuthUser & { userRole?: string }; requestId?: string; isAdmin?: boolean };
+export type AuthenticatedRequest = Request & { user?: AuthUser & { userRole?: string }; requestId?: string; isAdmin?: boolean; apiKey?: boolean };
 
 function cookie(req: Request, name: string) {
   const header = req.headers.cookie ?? '';
   for (const part of header.split(';')) {
     const [key, ...rest] = part.trim().split('=');
-    if (key === name) return decodeURIComponent(rest.join('='));
+    if (key === name) {
+      const value = rest.join('=');
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return value;
+      }
+    }
   }
   return undefined;
 }
@@ -42,6 +49,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     const key = await prismaApiKeyLookup(tokenHash);
     if (!key) return res.status(401).json({ error: 'Unauthorized', message: 'Invalid API key' });
     (req as AuthenticatedRequest).user = key.user;
+    (req as AuthenticatedRequest).apiKey = true;
     return next();
   }
 
@@ -77,7 +85,7 @@ export async function requireAdminRole(req: Request, res: Response, next: NextFu
       return res.status(401).json({ error: 'Unauthorized', message: 'User not found' });
     }
 
-    authReq.isAdmin = user.userRole === 'ADMIN';
+    authReq.isAdmin = !authReq.apiKey && user.userRole === 'ADMIN';
     if (authReq.user) {
       authReq.user.userRole = user.userRole;
     }
@@ -105,6 +113,10 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     const authReq = req as AuthenticatedRequest;
     if (!authReq.user) {
       return res.status(401).json({ error: 'Unauthorized', message: 'Authentication required' });
+    }
+
+    if (authReq.apiKey) {
+      return res.status(403).json({ error: 'Forbidden', message: 'This action requires admin privileges' });
     }
 
     const user = await prisma.user.findUnique({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { isAdmin, type UserWithRole } from '@/lib/roles';
+import { type UserWithRole } from '@/lib/roles';
 
 interface UseUserRoleReturn {
   user: UserWithRole | null;
@@ -85,12 +85,14 @@ export function useManageUserRoles(): UseManageUserRolesReturn {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4001/api';
+
   const fetchUsers = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch('/api/admin/users', {
+      const response = await fetch(`${API}/admin/users`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -116,7 +118,7 @@ export function useManageUserRoles(): UseManageUserRolesReturn {
     try {
       setError(null);
 
-      const response = await fetch(`/api/admin/users/${userId}/role`, {
+      const response = await fetch(`${API}/admin/users/${userId}/role`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -131,7 +133,7 @@ export function useManageUserRoles(): UseManageUserRolesReturn {
       }
 
       const updatedUser = await response.json();
-      setUsers(users.map(u => u.id === userId ? updatedUser.user : u));
+      setUsers(prev => prev.map(u => u.id === userId ? updatedUser.user : u));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to update user role';
       setError(message);

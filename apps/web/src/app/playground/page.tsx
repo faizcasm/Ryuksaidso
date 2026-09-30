@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -300,7 +300,7 @@ export default function PlaygroundPage() {
   const [speed, setSpeed] = useState(1);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
-  const [elapsedRef, setElapsedRef] = useState(0);
+  const elapsedRef = useRef(0);
 
   const activeRun = RUNS.find(r => r.key === activeKey) ?? RUNS[0];
   const isInteractive = activeRun.interactive;
@@ -343,21 +343,21 @@ export default function PlaygroundPage() {
   useEffect(() => {
     if (!isInteractive) return;
     if (phase !== "queued" && phase !== "running" && phase !== "waiting") return;
-    const started = Date.now() - elapsedRef;
+    const started = Date.now() - elapsedRef.current;
     const id = window.setInterval(() => {
       const value = Date.now() - started;
       setElapsed(value);
-      setElapsedRef(value);
+      elapsedRef.current = value;
     }, 100);
     return () => window.clearInterval(id);
-  }, [phase, isInteractive, elapsedRef]);
+  }, [phase, isInteractive]);
 
   const resetTriage = (start: boolean) => {
     setDecision(null);
     setCursor(0);
     setExpanded(null);
     setElapsed(0);
-    setElapsedRef(0);
+    elapsedRef.current = 0;
     setStepStates(TRIAGE_STEPS.map(() => "pending"));
     setPhase(start ? "queued" : "idle");
   };
