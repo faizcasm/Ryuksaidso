@@ -1,5 +1,7 @@
 # RYUKSAIDSO: Portfolio / Interview Pitch
 
+**Founder: Faizan Hameed (aka Faizcasm).** Live at https://ryuksaidso.faizcasm.me
+
 ## One sentence
 
 RYUKSAIDSO is a multi-tenant control plane for production AI agents that makes every agent execution observable, policy-gated, retryable and evaluatable.

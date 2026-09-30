@@ -3,6 +3,8 @@
 > **Everything about RYUKSAIDSO: what it is, what it does, how it works, why it helps, and every technical detail.**
 >
 > Version **2.0.0** · Monorepo · TypeScript-first · Last updated: September 2026
+>
+> **Founder: Faizan Hameed (aka Faizcasm)** · Live: https://ryuksaidso.faizcasm.me
 
 ---
 

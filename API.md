@@ -1,6 +1,6 @@
 # RYUKSAIDSO API
 
-Base URL: `http://localhost:4001/api` locally. In production nginx terminates TLS and proxies `https://<domain>/api` to the API replicas; the runtime endpoints (`/health`, `/ready`, `/metrics`, `/healthz`) are **not** under `/api` and are served directly by nginx/API.
+Base URL: `http://localhost:4001/api` locally, **`https://ryuksaidso.faizcasm.me/api`** in production (nginx terminates TLS and proxies to the API replicas); the runtime endpoints (`/health`, `/ready`, `/metrics`, `/healthz`) are **not** under `/api` and are served directly by nginx/API.
 
 All responses are JSON. Every response carries an `x-request-id` header (taken from the request or generated).
 
@@ -201,7 +201,7 @@ Static JSON used by the in-app docs/architecture pages:
 ## Example: queue a run with an API key
 
 ```bash
-curl -X POST https://<domain>/api/control/runs \
+curl -X POST https://ryuksaidso.faizcasm.me/api/control/runs \
   -H "Authorization: Bearer rsk_..." \
   -H "Content-Type: application/json" \
   -d '{"agentId":"clx...","prompt":"Investigate the authentication incident.","environment":"staging","trigger":"ci"}'

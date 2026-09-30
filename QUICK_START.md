@@ -41,9 +41,13 @@ pnpm dev
 
 ## 3. Open the control plane
 
+Production runs at **https://ryuksaidso.faizcasm.me** — you can try it without installing anything:
+
 | Service | URL |
 |---|---|
-| Control plane | http://localhost:3000 |
+| **Live control plane** | https://ryuksaidso.faizcasm.me |
+| **Live API base** | https://ryuksaidso.faizcasm.me/api |
+| Control plane (local) | http://localhost:3000 |
 | API (base for all client calls) | http://localhost:4001/api |
 | API liveness / readiness / metrics | http://localhost:4001/health · /ready · /metrics |
 | Postgres | localhost:5433 |
@@ -69,7 +73,7 @@ Create a workspace at http://localhost:3000 (the first account becomes OWNER of 
 ```bash
 pnpm lint        # ESLint flat config
 pnpm typecheck   # tsc --noEmit, all workspaces
-pnpm test        # vitest — 114 tests (apps/api/src/__tests__)
+pnpm test        # vitest — 130 tests (apps/api/src/__tests__)
 pnpm build       # prisma + tsc + next build
 ```
 
@@ -83,7 +87,7 @@ All four run in CI on every push/PR to `main`. Project convention: **no comments
 - [docs/PRODUCTION-SETUP.md](docs/PRODUCTION-SETUP.md) — AWS EC2 runbook
 - [docs/FEATURES.md](docs/FEATURES.md) · [docs/DEMO.md](docs/DEMO.md) · [docs/PROJECT_PITCH.md](docs/PROJECT_PITCH.md)
 - [DETAILRYUKSAIDSO.md](DETAILRYUKSAIDSO.md) — long-form project document
-- In-app: http://localhost:3000/docs and http://localhost:3000/architecture
+- In-app: https://ryuksaidso.faizcasm.me/docs and https://ryuksaidso.faizcasm.me/architecture (locally: http://localhost:3000/docs and http://localhost:3000/architecture)
 
 ## Troubleshooting quick hits
 
@@ -94,4 +98,4 @@ All four run in CI on every push/PR to `main`. Project convention: **no comments
 
 ---
 
-**Author**: Faizan Hameed · http://faizcasm.me · RYUKSAIDSO v2.0.0
+**Founder**: Faizan Hameed (aka Faizcasm) · https://faizcasm.me · RYUKSAIDSO v2.0.0 · Live: https://ryuksaidso.faizcasm.me

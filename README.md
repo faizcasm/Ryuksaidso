@@ -2,6 +2,10 @@
 
 **RYUKSAIDSO is an Agent Reliability & Control Plane for production AI systems.**
 
+**Live site:** **https://ryuksaidso.faizcasm.me** · Docs: https://ryuksaidso.faizcasm.me/docs · Architecture: https://ryuksaidso.faizcasm.me/architecture · Playground: https://ryuksaidso.faizcasm.me/playground
+
+**Founder: Faizan Hameed (aka Faizcasm).**
+
 It is built for the engineering loop around agents, not another chat wrapper:
 
 > **Design → Run → Trace → Gate → Evaluate → Retry → Ship**
@@ -109,9 +113,30 @@ Open `http://localhost:3000` and create a workspace.
 
 OAuth callbacks for local clients: `http://localhost:4001/api/auth/oauth/google/callback` and `http://localhost:4001/api/auth/oauth/github/callback`.
 
+## Developer quick curl (live site)
+
+Everything the dashboard does is plain HTTP against https://ryuksaidso.faizcasm.me — no local install needed:
+
+```bash
+curl https://ryuksaidso.faizcasm.me/healthz
+curl https://ryuksaidso.faizcasm.me/health
+curl https://ryuksaidso.faizcasm.me/ready
+curl https://ryuksaidso.faizcasm.me/api/docs
+curl https://ryuksaidso.faizcasm.me/api/architecture
+curl -X POST https://ryuksaidso.faizcasm.me/api/control/runs \
+  -H "Authorization: Bearer rsk_..." \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"Summarise yesterday\'s tickets","agentId":"..."}'
+curl -X POST https://ryuksaidso.faizcasm.me/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com","password":"..."}'
+```
+
+`GET /api/me` answers `401` when logged out — that is the expected unauthenticated probe. Page routes are all served over HTTPS with an HTTP→HTTPS redirect, and every response carries HSTS.
+
 ## Environment variables
 
-`.env.example` is the complete annotated template for local development (application URLs, Postgres, Redis, API/CORS, JWT/session TTLs, LLM providers, OAuth, agent tools, SMTP, worker, observability, feature flags). `.env.production.example` is the server-side template used by `docker-compose.prod.yml` on the instance (copy it to `/opt/ryuksaidso/.env`, which is the name compose reads).
+`.env.example` is the complete template for local development (application URLs, Postgres, Redis, API/CORS, JWT/session TTLs, LLM providers, OAuth, agent tools, SMTP, worker, observability, feature flags); every value is self-describing or a clearly-marked placeholder. `.env.production.example` is the server-side template used by `docker-compose.prod.yml` on the instance (copy it to `/opt/ryuksaidso/.env`, which is the name compose reads).
 
 Key variables:
 
@@ -135,7 +160,7 @@ The workspace default provider/model is selected per organization in **Settings 
 ```bash
 pnpm lint         # ESLint flat config (eslint.config.mjs), no-unused-vars etc.
 pnpm typecheck    # tsc --noEmit across api/web/worker/packages
-pnpm test         # vitest — 114 tests in apps/api/src/__tests__
+pnpm test         # vitest — 130 tests in apps/api/src/__tests__
 pnpm build        # prisma generate + tsc for api/worker/packages, next build for web
 pnpm db:generate  # prisma client
 pnpm db:migrate   # apply Prisma migrations
@@ -145,7 +170,7 @@ Project convention: **source files must not contain comments** — no `//`, no `
 
 ## Testing summary
 
-- 10 vitest files, **114 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, evaluator, regressions and HTTP server routes.
+- 11 vitest files, **130 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, evaluator, regressions and HTTP server routes.
 - Tests are hermetic (mocked Prisma/Redis) and run in CI after `pnpm db:generate`.
 - The worker/agent-runtime packages have no standalone unit tests; their behaviour is exercised through the API harness and the running stack.
 
@@ -183,7 +208,7 @@ Full step-by-step EC2 runbook — instance/security group setup, Docker install,
 | [docs/DEMO.md](docs/DEMO.md) | 5-minute demo script |
 | [docs/PROJECT_PITCH.md](docs/PROJECT_PITCH.md) | Portfolio / interview pitch |
 
-In-app: `http://localhost:3000/docs` (interactive documentation) and `http://localhost:3000/architecture` (3D topology view).
+In-app: **https://ryuksaidso.faizcasm.me/docs** (interactive documentation) and **https://ryuksaidso.faizcasm.me/architecture** (3D topology view). Locally: `http://localhost:3000/docs` and `http://localhost:3000/architecture`.
 
 ## First serious workflow
 

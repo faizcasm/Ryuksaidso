@@ -1,5 +1,7 @@
 # RYUKSAIDSO Architecture
 
+**Founder: Faizan Hameed (aka Faizcasm)** · Live: https://ryuksaidso.faizcasm.me · Interactive 3D view: https://ryuksaidso.faizcasm.me/architecture
+
 ## Product boundary
 
 RYUKSAIDSO is a multi-tenant control plane for AI agents. The primary entity is an **AgentRun**, not a support ticket.

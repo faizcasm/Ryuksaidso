@@ -74,17 +74,17 @@ POSTGRES_PASSWORD=<from openssl rand -hex 32>
 JWT_SECRET=<from openssl rand -base64 48>
 GRAFANA_ADMIN_PASSWORD=<from openssl rand -base64 24>
 
-CORS_ORIGIN=https://app.example.com
-FRONTEND_URL=https://app.example.com
-DOMAIN=app.example.com
-CERT_NAME=app.example.com
+CORS_ORIGIN=https://ryuksaidso.faizcasm.me
+FRONTEND_URL=https://ryuksaidso.faizcasm.me
+DOMAIN=ryuksaidso.faizcasm.me
+CERT_NAME=ryuksaidso.faizcasm.me
 
 SYSTEM_ADMIN_EMAILS=you@example.com              # bootstraps the first system admin
 ```
 
 > **No domain yet?** Run plain HTTP: set `CORS_ORIGIN=http://<instance-ip>` and `FRONTEND_URL=http://<instance-ip>`. Session cookies follow the frontend protocol automatically — `COOKIE_SECURE` defaults to "is `FRONTEND_URL` https" and can be forced with `COOKIE_SECURE=true|false` — so login works without TLS. Leave `DOMAIN`/`CERT_NAME` as placeholders until DNS points at the instance, then follow section 8. On a 1 GB instance also set `API_REPLICAS=1`.
 
-Optional: `OMNIROUTE_URL` / `OMNIROUTE_API` / `OMNIROUTE_MODEL` and `OLLAMA_*` (defaults point at the `llm-proxy` forwarder: `:11435 → 127.0.0.1:11434` for Ollama, `:20129 → 127.0.0.1:20128` for OmniRoute), SMTP variables for real email delivery, OAuth client credentials (callback URLs: `https://<domain>/api/auth/oauth/google/callback` and `.../github/callback`).
+Optional: `OMNIROUTE_URL` / `OMNIROUTE_API` / `OMNIROUTE_MODEL` and `OLLAMA_*` (defaults point at the `llm-proxy` forwarder: `:11435 → 127.0.0.1:11434` for Ollama, `:20129 → 127.0.0.1:20128` for OmniRoute), SMTP variables for real email delivery, OAuth client credentials (callback URLs: `https://ryuksaidso.faizcasm.me/api/auth/oauth/google/callback` and `https://ryuksaidso.faizcasm.me/api/auth/oauth/github/callback`).
 
 Upload it to the instance — **compose reads `.env` from the project directory**, so place it as `/opt/ryuksaidso/.env`:
 
@@ -129,7 +129,7 @@ chmod 600 ~/.ssh/authorized_keys
 
 | Variable | Value | Notes |
 |---|---|---|
-| `NEXT_PUBLIC_API_URL` | `https://<domain>/api` | Optional. Baked into the **web image at build time** as a Docker build-arg. Production builds fall back to the same-origin `/api`, which the reverse proxy forwards, so you normally leave this unset — set it only when the API is served from a different origin than the UI. |
+| `NEXT_PUBLIC_API_URL` | `https://ryuksaidso.faizcasm.me/api` | Optional. Baked into the **web image at build time** as a Docker build-arg. Production builds fall back to the same-origin `/api`, which the reverse proxy forwards, so you normally leave this unset — set it only when the API is served from a different origin than the UI. |
 
 **Before the secrets exist**
 
@@ -163,6 +163,18 @@ curl -fsS http://127.0.0.1/ready | head -c 400
 curl -fsS http://127.0.0.1/metrics | head
 ```
 
+And from any machine, straight against the public site:
+
+```bash
+curl -sI https://ryuksaidso.faizcasm.me/ | head -1
+curl -sI http://ryuksaidso.faizcasm.me/ | head -1
+curl -fsS https://ryuksaidso.faizcasm.me/healthz
+curl -fsS https://ryuksaidso.faizcasm.me/health
+curl -fsS https://ryuksaidso.faizcasm.me/ready | head -c 400
+curl -fsS https://ryuksaidso.faizcasm.me/api/docs | head -c 200
+curl -s -o /dev/null -w '%{http_code}\n' https://ryuksaidso.faizcasm.me/api/me
+```
+
 Note: `/ready` returns `503` until at least one LLM provider (Ollama on the host or an OmniRoute URL) is reachable through `llm-proxy`. The deploy gate only needs `/healthz` and `/health`, so a missing model runtime does not block a deploy — runs will simply fail until a provider is configured.
 
 ## 7. Subsequent automatic deploys
@@ -175,7 +187,7 @@ Concurrency is serialized by the `production-deploy` group (no overlapping deplo
 
 ## 8. TLS certificate (certbot) with docker-compose.tls.yml
 
-Do this once HTTP works (`http://<domain>` reachable on port 80 and DNS pointing at the instance).
+Do this once HTTP works (`http://ryuksaidso.faizcasm.me` reachable on port 80 and DNS pointing at the instance).
 
 ```bash
 cd /opt/ryuksaidso
@@ -184,7 +196,7 @@ set -a; source .env; set +a
 docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml --profile tls \
   run --rm --entrypoint certbot certbot certonly \
   --webroot -w /var/www/certbot \
-  -d "$DOMAIN" --email you@example.com --agree-tos --no-eff-email
+  -d "$DOMAIN" --email faizanhameed690@gmail.com --agree-tos --no-eff-email
 
 docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml --profile tls up -d
 docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml exec nginx nginx -t
@@ -204,7 +216,7 @@ From then on run all stack commands with **both** `-f` files (and `--profile tls
 docker compose -f docker-compose.prod.yml -f docker-compose.tls.yml ps
 ```
 
-**Automated deploys are TLS-aware.** Before touching the stack, `deploy.yml` inspects the running `nginx` container: when it is mounted with `infra/nginx/conf.d/tls.conf.template` (the overlay is active), every compose command in the workflow runs with **both** `-f` files, it exports `COMPOSE_PROFILES=tls` so the `certbot` container is kept instead of being removed as an orphan, and the health gate probes `https://127.0.0.1/healthz` and `https://127.0.0.1/health` (with `curl -k`). Otherwise it uses the base file and gates over HTTP. Certificates live in the `certbot-certs` volume, so they are never touched by a deploy.
+**Automated deploys are TLS-aware.** Before touching the stack, `deploy.yml` decides whether HTTPS is in play: the TLS overlay is applied when **either** the running `nginx` container is already mounted with `infra/nginx/conf.d/tls.conf.template` **or** `/opt/ryuksaidso/.env` defines a non-empty `DOMAIN=` (so TLS turns on from the very first deploy once DNS exists, instead of only from the second one onward). When it is active, every compose command in the workflow runs with **both** `-f` files, it exports `COMPOSE_PROFILES=tls` so the `certbot` container is kept instead of being removed as an orphan, and the health gate probes `https://127.0.0.1/healthz` and `https://127.0.0.1/health` (with `curl -k`). Otherwise it uses the base file and gates over HTTP. Certificates live in the `certbot-certs` volume, so they are never touched by a deploy.
 
 Manual commands still need both files:
 
@@ -486,14 +498,19 @@ In development, when SMTP is not configured, the API logs the generated reset UR
 ```env
 GOOGLE_CLIENT_ID=<client id>
 GOOGLE_CLIENT_SECRET=<client secret>
-GOOGLE_REDIRECT_URI=https://<domain>/api/auth/oauth/google/callback
+GOOGLE_REDIRECT_URI=https://ryuksaidso.faizcasm.me/api/auth/oauth/google/callback
 
 GITHUB_CLIENT_ID=<client id>
 GITHUB_CLIENT_SECRET=<client secret>
-GITHUB_REDIRECT_URI=https://<domain>/api/auth/oauth/github/callback
+GITHUB_REDIRECT_URI=https://ryuksaidso.faizcasm.me/api/auth/oauth/github/callback
 ```
 
-Register the exact callback URLs on the provider apps (locally: `http://localhost:4001/api/auth/oauth/{google,github}/callback`). OAuth flows use PKCE with a Redis-stored 10-minute state and redirect back to `/auth/callback` (success) or `/auth/error?reason=...` (failure).
+Register the exact callback URLs on the provider apps:
+
+- production: `https://ryuksaidso.faizcasm.me/api/auth/oauth/google/callback` and `https://ryuksaidso.faizcasm.me/api/auth/oauth/github/callback`
+- locally: `http://localhost:4001/api/auth/oauth/{google,github}/callback`
+
+OAuth flows use PKCE with a Redis-stored 10-minute state and redirect back to `/auth/callback` (success) or `/auth/error?reason=...` (failure).
 
 # Appendix D — Admin surface
 
