@@ -26,7 +26,7 @@ function hashSecret(value: string) {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 function readCookie(req: { headers: { cookie?: string } }, name: string) {
-  for (const part of (req.headers.cookie ?? '').split(';')) { const [k, ...v] = part.trim().split('='); if (k === name) return decodeURIComponent(v.join('=')); }
+  for (const part of (req.headers.cookie ?? '').split(';')) { const [k, ...v] = part.trim().split('='); if (k === name) { const raw = v.join('='); try { return decodeURIComponent(raw); } catch { return raw; } } }
 }
 
 accountRouter.get('/profile', async (req, res) => {
@@ -140,7 +140,7 @@ accountRouter.patch('/llm', async (req, res, next) => {
       if (discovered.length && !isModelAvailable(discovered, model)) {
         return res.status(400).json({ error:'ModelUnavailable', message:`${provider} is reachable, but model "${model}" is not available. Choose a discovered model or install/configure it first.` });
       }
-    } catch (error) {
+    } catch {
       return res.status(503).json({ error:'ProviderUnavailable', message:`Could not reach ${provider}. Check its URL, API key, and model service before saving this provider.` });
     }
     const data = provider === 'OLLAMA' ? { llmProvider: provider as any, ollamaModel: model } : { llmProvider: provider as any, omnirouteModel: model };

@@ -1,10 +1,9 @@
 import { Router, type Response } from 'express';
 import crypto from 'node:crypto';
-import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/db';
 import { redis } from '../lib/redis';
 import { config } from '../lib/config';
-import { audit, clearAuthCookies, createSession, providerConfig, rotateSession, revokeSession, setSessionCookies, verifyPassword, hashPassword, ACCESS_COOKIE, REFRESH_COOKIE } from '../lib/auth';
+import { audit, clearAuthCookies, createSession, providerConfig, rotateSession, revokeSession, setSessionCookies, verifyPassword, hashPassword, REFRESH_COOKIE } from '../lib/auth';
 import { forgotPasswordSchema, loginSchema, registerSchema, resetPasswordSchema } from '../validation';
 import { sendPasswordResetEmail, sendVerificationEmail } from '../services/email';
 import { logger } from '../lib/logger';
@@ -78,7 +77,7 @@ async function provisionAgents(tx: any, organizationId: string) {
 
 
 function readCookie(req: { headers: { cookie?: string } }, name: string) {
-  for (const part of (req.headers.cookie ?? '').split(';')) { const [k,...v]=part.trim().split('='); if(k===name) return decodeURIComponent(v.join('=')); }
+  for (const part of (req.headers.cookie ?? '').split(';')) { const [k,...v]=part.trim().split('='); if(k===name){ const raw=v.join('='); try { return decodeURIComponent(raw); } catch { return raw; } } }
 }
 
 authRouter.get('/providers', (_req, res) => res.json({ google: Boolean(providerConfig('google')), github: Boolean(providerConfig('github')) }));

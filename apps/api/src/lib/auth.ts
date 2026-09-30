@@ -19,12 +19,14 @@ export function csrfCookieOptions() {
   return { httpOnly: false, secure: config.NODE_ENV === 'production', sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none', path: '/', maxAge: 86_400_000 } as const;
 }
 
-export function setCsrfCookie(res: { cookie: Function }, token = crypto.randomBytes(32).toString('hex')) {
+type CookieFn = (...args: any[]) => any;
+
+export function setCsrfCookie(res: { cookie: CookieFn }, token = crypto.randomBytes(32).toString('hex')) {
   res.cookie(CSRF_COOKIE, token, csrfCookieOptions());
   return token;
 }
 
-export function clearAuthCookies(res: { clearCookie: Function }) {
+export function clearAuthCookies(res: { clearCookie: CookieFn }) {
   const base = { secure: config.NODE_ENV === 'production', sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none' } as const;
   res.clearCookie(ACCESS_COOKIE, { ...base, httpOnly: true, path: '/' });
   res.clearCookie(REFRESH_COOKIE, { ...base, httpOnly: true, path: '/api' });
@@ -32,7 +34,7 @@ export function clearAuthCookies(res: { clearCookie: Function }) {
   res.clearCookie(CSRF_COOKIE, { ...base, httpOnly: false, path: '/' });
 }
 
-export function setSessionCookies(res: { cookie: Function; clearCookie: Function }, accessToken: string, refreshToken: string) {
+export function setSessionCookies(res: { cookie: CookieFn; clearCookie: CookieFn }, accessToken: string, refreshToken: string) {
   const base = { secure: config.NODE_ENV === 'production', sameSite: config.COOKIE_SAME_SITE as 'lax' | 'strict' | 'none', httpOnly: true } as const;
   res.clearCookie(REFRESH_COOKIE, { ...base, path: '/api/auth' });
   res.cookie(ACCESS_COOKIE, accessToken, { ...base, path: '/', maxAge: 15 * 60 * 1000 });

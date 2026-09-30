@@ -49,10 +49,10 @@ adminRouter.get('/users', requireAdmin, async (req, res) => {
 adminRouter.patch('/users/:userId/role', requireAdmin, async (req, res) => {
   try {
     const u = await admin(req as AuthenticatedRequest);
-    const { userRole } = req.body;
+    const userRole = (req.body as { userRole?: string } | undefined)?.userRole;
     const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
 
-    if (!['USER', 'ADMIN'].includes(userRole)) {
+    if (!['USER', 'ADMIN'].includes(userRole as string)) {
       return res.status(400).json({ error: 'ValidationError', message: 'Invalid role. Must be USER or ADMIN' });
     }
 
@@ -109,7 +109,7 @@ adminRouter.get('/me/role', requireAuth, async (req, res) => {
       user,
       isAdmin: user.userRole === 'ADMIN'
     });
-  } catch (e) {
+  } catch {
     res.status(500).json({ error: 'InternalError', message: 'Failed to fetch user role' });
   }
 });
