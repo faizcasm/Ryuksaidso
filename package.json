@@ -7,8 +7,8 @@
     "dev": "pnpm --parallel --filter @ryuksaidso/api --filter @ryuksaidso/web --filter @ryuksaidso/worker dev",
     "build": "pnpm --recursive --if-present build",
     "lint": "eslint .",
-    "typecheck": "pnpm --recursive --if-present typecheck",
-    "test": "pnpm --filter @ryuksaidso/api test",
+    "typecheck": "pnpm --filter \"./packages/*\" build && pnpm --recursive --if-present typecheck",
+    "test": "pnpm --filter \"./packages/*\" build && pnpm --filter @ryuksaidso/api test",
     "db:generate": "pnpm --filter @ryuksaidso/api prisma:generate",
     "db:migrate": "pnpm --filter @ryuksaidso/api prisma:migrate"
   },
