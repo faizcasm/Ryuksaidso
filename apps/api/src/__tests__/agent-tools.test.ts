@@ -164,18 +164,18 @@ describe('web_search (three-engine fallback)', () => {
   const html = (body: string, status = 200) => Promise.resolve(new Response(body, { status }));
   const json = (data: unknown) => Promise.resolve(new Response(JSON.stringify(data)));
   const anomaly = '<html><head><title>DuckDuckGo</title></head><body>Our systems have detected an anomaly challenge.</body></html>';
-  const bingPage = [
-    '<ol id="b_results">',
-    '<li class="b_algo" data-id iid=SERP.1><div><h2><a href="https://www.bing.com/ck/a?!&amp;&amp;p=abc&amp;u=a1aHR0cHM6Ly9ub2RlanMub3JnL2VuL2Rvd25sb2Fk&amp;ntb=1">Download <strong>Node.js</strong></a></h2></div><div class="b_caption"><p>Learn more about Node.js releases.</p></div></li>',
-    '<li class="b_algo" data-id iid=SERP.2><div><h2><a href="https://nodejs.org/en/about/releases/">Releases</a></h2></div><div class="b_caption"><p>LTS schedule.</p></div></li>',
-    '</ol>',
+  const bingRss = [
+    '<?xml version="1.0" encoding="utf-8" ?><rss version="2.0"><channel><title>Bing: node.js lts</title>',
+    '<item><title>Download &lt;strong&gt;Node.js&lt;/strong&gt;</title><link>https://nodejs.org/en/download</link><description>Learn more about Node.js releases &amp; schedules.</description><pubDate>Wed, 30 Sep 2026 01:35:00 GMT</pubDate></item>',
+    '<item><title>Releases</title><link>https://nodejs.org/en/about/releases/</link><description>LTS schedule.</description></item>',
+    '</channel></rss>',
   ].join('');
 
   it('falls back to Bing when DuckDuckGo serves an anomaly page', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string) => {
       const u = String(url);
       if (u.includes('duckduckgo')) return html(anomaly, 202);
-      if (u.includes('bing.com/search')) return html(bingPage);
+      if (u.includes('bing.com/search')) return html(bingRss);
       return html('');
     }));
     try {
@@ -186,7 +186,7 @@ describe('web_search (three-engine fallback)', () => {
       expect(out.results[0]).toMatchObject({
         title: 'Download Node.js',
         url: 'https://nodejs.org/en/download',
-        snippet: 'Learn more about Node.js releases.',
+        snippet: 'Learn more about Node.js releases & schedules.',
       });
       expect(out.results[1].url).toBe('https://nodejs.org/en/about/releases/');
     } finally { vi.unstubAllGlobals(); }

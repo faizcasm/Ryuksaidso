@@ -207,8 +207,18 @@ async function wikipedia(query: string, limit: number): Promise<SearchHit[]> {
   return hits;
 }
 
+const decodeEntities = (text: string): string =>
+  text
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+
 const decodeBingUrl = (href: string): string => {
-  const target = href.replace(/&amp;/g, '&');
+  const target = decodeEntities(href.trim());
   const encoded = /[?&]u=a1([^&"]+)/.exec(target);
   const value = encoded
     ? Buffer.from(encoded[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
@@ -218,23 +228,31 @@ const decodeBingUrl = (href: string): string => {
 
 async function bing(query: string, limit: number): Promise<SearchHit[]> {
   const response = await fetch(
-    `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${Math.max(limit, 5)}&setlang=en`,
+    `https://www.bing.com/search?q=${encodeURIComponent(query)}&format=rss`,
     {
-      headers: { 'user-agent': USER_AGENT, 'accept-language': 'en-US,en;q=0.9' },
+      headers: {
+        'user-agent': USER_AGENT,
+        accept: 'application/rss+xml, application/xml, text/xml, */*',
+      },
       signal: AbortSignal.timeout(9000),
     },
   );
   if (!response.ok) throw new Error(`Bing HTTP ${response.status}`);
-  const html = await response.text();
+  const xml = await response.text();
   const hits: SearchHit[] = [];
-  for (const chunk of html.split(/<li[^>]*class="[^"]*\bb_algo\b[^"]*"/i).slice(1)) {
+  for (const chunk of xml.split('<item>').slice(1)) {
     if (hits.length >= limit) break;
-    const link = /<h2[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i.exec(chunk);
-    if (!link) continue;
+    const title = /<title>([\s\S]*?)<\/title>/.exec(chunk);
+    const link = /<link>([\s\S]*?)<\/link>/.exec(chunk);
+    if (!title || !link) continue;
     const url = decodeBingUrl(link[1]);
     if (!url) continue;
-    const caption = /class="[^"]*b_caption[^"]*"[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i.exec(chunk);
-    hits.push({ title: TAGS(link[2]), url, snippet: caption ? TAGS(caption[1]) : '' });
+    const description = /<description>([\s\S]*?)<\/description>/.exec(chunk);
+    hits.push({
+      title: TAGS(decodeEntities(title[1])),
+      url,
+      snippet: TAGS(decodeEntities(description?.[1] ?? '')),
+    });
   }
   if (!hits.length) throw new Error('Bing returned no parseable results');
   return hits;
