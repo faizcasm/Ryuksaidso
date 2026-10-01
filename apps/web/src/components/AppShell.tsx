@@ -683,6 +683,12 @@ export default function AppShell() {
       setRuns(nextRuns);
       setApprovals(nextApprovals);
       setTickets(nextTickets);
+      setSelectedRun((prev) => {
+        if (!prev) return prev;
+        const fresh = nextRuns.find((r) => r.id === prev.id);
+        if (!fresh) return prev;
+        return { ...fresh, approvals: prev.approvals };
+      });
       return nextRuns;
     } catch {
       return runs;
@@ -5138,17 +5144,32 @@ function StepOutput({ step }: { step: any }) {
           {cards.map((card, index) => (
             <ObsCard data={card} key={index} />
           ))}
-          <details className="step-raw">
-            <summary>Plan &amp; tool details</summary>
-            <pre>{pretty(raw)}</pre>
-          </details>
+          <RawDetails raw={raw} />
         </div>
       );
     }
     const nested = presentationOf((raw as any).output);
     if (nested) return <ObsCard data={nested} />;
   }
-  return <pre>{pretty(raw)}</pre>;
+  return <pre>{prettyPreview(raw)}</pre>;
+}
+
+function RawDetails({ raw }: { raw: any }) {
+  const ref = useRef<HTMLDetailsElement | null>(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onToggle = () => setOpen(el.open);
+    el.addEventListener("toggle", onToggle);
+    return () => el.removeEventListener("toggle", onToggle);
+  }, []);
+  return (
+    <details className="step-raw" ref={ref}>
+      <summary>Plan &amp; tool details</summary>
+      {open && <pre>{prettyPreview(raw)}</pre>}
+    </details>
+  );
 }
 
 type ObsMetricChip = { label: string; value: string; tone?: "good" | "warn" | "bad" };
@@ -5724,6 +5745,17 @@ function pretty(v: any) {
   } catch {
     return String(v);
   }
+}
+const PREVIEW_CAP = 60000;
+function prettyPreview(v: any) {
+  let text: string;
+  try {
+    text = JSON.stringify(v, null, 2) ?? String(v);
+  } catch {
+    text = String(v);
+  }
+  if (text.length <= PREVIEW_CAP) return text;
+  return `${text.slice(0, PREVIEW_CAP)}\n… [truncated ${text.length - PREVIEW_CAP} characters]`;
 }
 function formatWhen(value: string) {
   const d = new Date(value);

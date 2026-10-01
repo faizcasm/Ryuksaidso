@@ -348,6 +348,7 @@ html[data-theme='light'] ::-webkit-scrollbar-thumb{background:rgba(15,23,42,.2);
 .step-raw{border:1px dashed var(--line);border-radius:9px}
 .step-raw summary{font-size:9px;color:#8f98a9;padding:8px 11px;cursor:pointer;letter-spacing:.05em;text-transform:uppercase}
 .step-raw pre{margin:0 9px 9px;max-height:300px}
+.step pre{white-space:pre-wrap;overflow-wrap:anywhere}
 html[data-theme='light'] .obs-error-detail pre{background:#f7f8fb;color:#445069}
 html[data-theme='light'] .step-answer>p{color:#334155}
 html[data-theme='light'] .obs-errors-mini span,html[data-theme='light'] .obs-error-msg,html[data-theme='light'] .obs-table span{color:#334155}
