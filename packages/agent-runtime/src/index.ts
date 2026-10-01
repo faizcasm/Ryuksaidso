@@ -95,7 +95,7 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
     const { instructions, tools: agentTools, systemPrompt } = getEffectiveAgentConfig();
     const persona = typeof systemPrompt === 'string' && systemPrompt.trim() ? systemPrompt : instructions;
     const isRunAdmin = ['OWNER', 'ADMIN'].includes(String(user.role ?? ''));
-    const configuredTools = (Array.isArray(agentTools) ? agentTools.map(String) : Object.keys(deps.tools)).filter(
+    const configuredTools = (Array.isArray(agentTools) ? agentTools.map(String) : ['search_knowledge']).filter(
       (name: string) => deps.tools[name] && (isRunAdmin || !deps.tools[name].adminOnly),
     );
     const toolCatalog = configuredTools.filter((name: string) => deps.tools[name]).map((name: string) => {
