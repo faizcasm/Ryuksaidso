@@ -996,7 +996,7 @@ export default function LandingPage() {
         </small>
       </footer>
 
-      <style jsx>{`
+      <style jsx global>{`
         .landing {
           position: relative;
           min-height: 100vh;
