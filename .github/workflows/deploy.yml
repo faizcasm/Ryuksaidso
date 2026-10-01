@@ -125,7 +125,7 @@ jobs:
             echo "Deploy healthy"
             dc ps
             docker image prune -f >/dev/null 2>&1 || true
-            docker images --format '{{.Repository}}:{{.Tag}}' | grep ryuksaidso | grep -v ":${IMAGE_TAG}$" | grep -v ":${PREV_TAG:-__none__}$" | while read -r img; do
+            docker images --format '{{.Repository}}:{{.Tag}}' | grep ryuksaidso | grep -v ":${IMAGE_TAG}$" | while read -r img; do
               docker rmi "$img" >/dev/null 2>&1 || true
             done || true
             exit 0
@@ -136,6 +136,9 @@ jobs:
             echo "Rolling back to $PREV_TAG"
             export IMAGE_TAG="$PREV_TAG"
             dc up -d --remove-orphans
+            docker images --format '{{.Repository}}:{{.Tag}}' | grep ryuksaidso | grep -v ":${IMAGE_TAG}$" | while read -r img; do
+              docker rmi "$img" >/dev/null 2>&1 || true
+            done || true
           fi
           exit 1
           REMOTE
