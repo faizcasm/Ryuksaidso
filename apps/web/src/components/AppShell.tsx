@@ -1581,6 +1581,7 @@ export default function AppShell() {
             <AdminView
               data={adminData}
               viewerRole={user.role}
+              viewerSystemRole={user.userRole ?? "USER"}
               providerState={providerState}
               onRefresh={loadAdmin}
               onRole={changeRole}
@@ -4337,6 +4338,7 @@ function SettingsView({
 function AdminView({
   data,
   viewerRole,
+  viewerSystemRole,
   providerState,
   onRefresh,
   onRole,
@@ -4347,6 +4349,7 @@ function AdminView({
 }: {
   data: AdminOverview | null;
   viewerRole: string;
+  viewerSystemRole: string;
   providerState: ProviderState | null;
   onRefresh: () => Promise<void> | void;
   onRole: (id: string, r: string) => void;
@@ -4511,7 +4514,7 @@ function AdminView({
           </div>
         </div>
       </div>
-      <ObservabilitySection viewerRole={viewerRole} />
+      <ObservabilitySection viewerRole={viewerRole} viewerSystemRole={viewerSystemRole} />
       <div className="admin-grid">
         <section className="panel">
           <PanelHeader
@@ -4989,8 +4992,8 @@ function ObsCard({ data }: { data: ObsPresentationData }) {
   );
 }
 
-function ObservabilitySection({ viewerRole }: { viewerRole: string }) {
-  const allowed = viewerRole === "OWNER" || viewerRole === "ADMIN";
+function ObservabilitySection({ viewerRole, viewerSystemRole }: { viewerRole: string; viewerSystemRole: string }) {
+  const allowed = viewerRole === "OWNER" || viewerRole === "ADMIN" || viewerSystemRole === "ADMIN";
   const [summary, setSummary] = useState<any>(null);
   const [errorsData, setErrorsData] = useState<any>(null);
   const [requests, setRequests] = useState<any>(null);
