@@ -128,7 +128,7 @@ All routes require auth. Mutations marked with roles beyond authentication are e
 - `POST /documents` — **OWNER/ADMIN/AGENT**. `{ title, content, source?, agentId?, metadata? }` (content max 2 MB). `201` document; `404` when `agentId` is not in the workspace.
 - `GET /agents` — flat agent list (name-ordered).
 - `PATCH /agents/:id` — **OWNER/ADMIN**. Same body as `PATCH /control/agents/:id`.
-- `GET /tools` — merged tool metadata (built-in registry + configured MCP tools), `execute` functions stripped.
+- `GET /tools` — merged tool metadata (built-in registry + configured MCP tools), `execute` functions stripped. Admin-only tools (`adminOnly`) are filtered out for members without the `OWNER`/`ADMIN` role — 46 entries for admins, 34 otherwise.
 
 ## Account & workspace — `/api` (authenticated)
 
@@ -183,6 +183,11 @@ All routes require auth. Mutations marked with roles beyond authentication are e
 - `GET /admin/me/role` — `{ user, isAdmin }` for the caller.
 - `GET /admin/overview` — 14-day operational overview: org + provider, counts (members/projects/agents/documents/pending approvals/sessions/api keys/open tickets/verified members), daily run series, top agents, provider/status splits, registrations, top tools, live health probes (Postgres/Redis/LLM with latencies), recent runs, members, audit logs. `Cache-Control: no-store`.
 - `GET /admin/runs?limit=` — `limit` 1–250 (default 100) runs with approvals and ordered steps.
+- `GET /admin/observability/summary?sinceMinutes=` — service health probes (Postgres/Redis/API/Web/LLM/OmniRoute), system metrics (CPU/memory/disk/load), request statistics from the Redis ring buffer, Prometheus/Loki/Grafana backend detection and a presentational payload (`{ status, stats, services, system, backends, presentation }`). `403` for non-admin members.
+- `GET /admin/observability/errors?sinceMinutes=&limit=&source=` — merged error stream (ring-buffer request 5xx/4xx + captured error logs + Loki when reachable), secrets redacted, `rootCause` hint and a visual `presentation`. `403` for non-admin members.
+- `GET /admin/observability/requests?sinceMinutes=&status=&method=&path=&q=&limit=` — searchable request log with request IDs. `403` for non-admin members.
+- `GET /admin/observability/backends` — `{ prometheus, loki, grafana, sources }` capability report (configured/reachable per backend). `403` for non-admin members.
+- All four: `Cache-Control: no-store`.
 - `GET /admin/audit?limit=` — `limit` 1–500 (default 200) audit entries.
 - `PATCH /admin/members/:id/role` — workspace role change with the same guard rails as `/members/:id/role` (plus self-demotion blocked).
 - `POST /admin/members/:id/revoke-sessions` — revokes all sessions of the member behind the membership. `204`; `404`.

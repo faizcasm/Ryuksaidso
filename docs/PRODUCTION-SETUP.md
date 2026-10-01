@@ -84,7 +84,7 @@ SYSTEM_ADMIN_EMAILS=you@example.com              # bootstraps the first system a
 
 > **No domain yet?** Run plain HTTP: set `CORS_ORIGIN=http://<instance-ip>` and `FRONTEND_URL=http://<instance-ip>`. Session cookies follow the frontend protocol automatically — `COOKIE_SECURE` defaults to "is `FRONTEND_URL` https" and can be forced with `COOKIE_SECURE=true|false` — so login works without TLS. Leave `DOMAIN`/`CERT_NAME` as placeholders until DNS points at the instance, then follow section 8. On a 1 GB instance also set `API_REPLICAS=1`.
 
-Optional: `OMNIROUTE_URL` / `OMNIROUTE_API` / `OMNIROUTE_MODEL` and `OLLAMA_*` (defaults point at the `llm-proxy` forwarder: `:11435 → 127.0.0.1:11434` for Ollama, `:20129 → 127.0.0.1:20128` for OmniRoute), SMTP variables for real email delivery, OAuth client credentials (callback URLs: `https://ryuksaidso.faizcasm.me/api/auth/oauth/google/callback` and `https://ryuksaidso.faizcasm.me/api/auth/oauth/github/callback`).
+Optional: `OMNIROUTE_URL` / `OMNIROUTE_API` / `OMNIROUTE_MODEL` and `OLLAMA_*` (defaults point at the `llm-proxy` forwarder: `:11435 → 127.0.0.1:11434` for Ollama, `:20129 → 127.0.0.1:20128` for OmniRoute), SMTP variables for real email delivery (plus `IMAP_HOST` / `IMAP_PORT` / `IMAP_USER` / `IMAP_PASSWORD` for the agent email tools — when `IMAP_HOST` is empty it is derived from `SMTP_HOST` by swapping `smtp.` for `imap.`), `FILES_ROOT` (workspace file-tool sandbox, default `/data/files`), `PROMETHEUS_URL` / `LOKI_URL` / `GRAFANA_URL` (observability tool backends — the admin `prometheus_query`/`loki_query` tools auto-detect them; leave unset to run API-native-only), OAuth client credentials (callback URLs: `https://ryuksaidso.faizcasm.me/api/auth/oauth/google/callback` and `https://ryuksaidso.faizcasm.me/api/auth/oauth/github/callback`).
 
 Upload it to the instance — **compose reads `.env` from the project directory**, so place it as `/opt/ryuksaidso/.env`:
 
@@ -490,6 +490,17 @@ EMAIL_FROM=RYUKSAIDSO <no-reply@example.com>
 ```
 
 Reset tokens are single-use, hashed at rest, expire after 30 minutes, and revoke existing sessions after a successful reset. The forgot-password endpoint returns the same response for known and unknown emails to reduce account enumeration.
+
+The same SMTP block powers the agent email tools. For inbound `search_email` / `read_email`, also set:
+
+```env
+IMAP_HOST=imap.example.com    # derived from SMTP_HOST when empty (smtp.* → imap.*)
+IMAP_PORT=993
+IMAP_USER=<imap user>
+IMAP_PASSWORD=<imap password>
+```
+
+When IMAP is unreachable the tools degrade to the messages already stored in `EmailRecord`; `send_email` / `reply_email` always require explicit human confirmation in the approval queue.
 
 In development, when SMTP is not configured, the API logs the generated reset URL so the complete flow can still be tested locally.
 

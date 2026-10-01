@@ -1,6 +1,6 @@
 import type { BuildToolsDeps, ToolDef } from './types';
 import { calculate } from './calc';
-import { currentTimeTool, currentWeatherTool, webSearchTool, githubTool } from './external';
+import { currentTimeTool, currentWeatherTool, webSearchTool, githubTool, fetchPageTool } from './external';
 import {
   currencyConvertTool,
   unitConvertTool,
@@ -8,12 +8,35 @@ import {
   newsTool,
   textToolsTool,
 } from './data';
+import {
+  githubSearchReposTool,
+  githubReadFileTool,
+  githubCreateIssueTool,
+  githubUpdateIssueTool,
+  githubCommentIssueTool,
+  githubCreateBranchTool,
+  githubGetPullRequestTool,
+  githubCreatePullRequestTool,
+} from './github-tools';
+import { fsListTool, fsReadTool, fsSearchTool, fsWriteTool } from './fs-tools';
+import { buildDatabaseTools } from './database-tools';
+import { buildEmailTools } from './email-tools';
+import { buildCalendarTools } from './calendar-tools';
+import { buildObservabilityTools } from './observability-tools';
 import { softFail } from './util';
 
-export type { ToolDef, ToolContext, BuildToolsDeps } from './types';
+export type { ToolDef, ToolContext, BuildToolsDeps, ObsRedis } from './types';
+export { ADMIN_ROLES, isAdminRole, toolAllowedForRole } from './types';
 export { calculate } from './calc';
 export { loadMcpTools, mcpConfigured, resetMcpCache } from './mcp';
-export { currentTimeTool, currentWeatherTool, webSearchTool, githubTool } from './external';
+export { currentTimeTool, currentWeatherTool, webSearchTool, githubTool, fetchPageTool } from './external';
+export * from './github-tools';
+export { fsListTool, fsReadTool, fsSearchTool, fsWriteTool } from './fs-tools';
+export { buildDatabaseTools } from './database-tools';
+export { buildEmailTools } from './email-tools';
+export { buildCalendarTools } from './calendar-tools';
+export * from './observability-tools';
+export { redactSecrets, assertPublicHttpUrl } from './util';
 export {
   currencyConvertTool,
   unitConvertTool,
@@ -118,6 +141,23 @@ export function buildTools(deps: BuildToolsDeps): Record<string, ToolDef> {
     dictionary: { ...dictionaryTool, execute: dictionaryTool.execute as ToolDef['execute'] },
     news: { ...newsTool, execute: newsTool.execute as ToolDef['execute'] },
     text_tools: { ...textToolsTool, execute: textToolsTool.execute as ToolDef['execute'] },
+    fetch_page: { ...fetchPageTool, execute: fetchPageTool.execute as ToolDef['execute'] },
+    github_search_repositories: { ...githubSearchReposTool, execute: githubSearchReposTool.execute as ToolDef['execute'] },
+    github_read_file: { ...githubReadFileTool, execute: githubReadFileTool.execute as ToolDef['execute'] },
+    github_create_issue: { ...githubCreateIssueTool, execute: githubCreateIssueTool.execute as ToolDef['execute'] },
+    github_update_issue: { ...githubUpdateIssueTool, execute: githubUpdateIssueTool.execute as ToolDef['execute'] },
+    github_comment_issue: { ...githubCommentIssueTool, execute: githubCommentIssueTool.execute as ToolDef['execute'] },
+    github_create_branch: { ...githubCreateBranchTool, execute: githubCreateBranchTool.execute as ToolDef['execute'] },
+    github_get_pull_request: { ...githubGetPullRequestTool, execute: githubGetPullRequestTool.execute as ToolDef['execute'] },
+    github_create_pull_request: { ...githubCreatePullRequestTool, execute: githubCreatePullRequestTool.execute as ToolDef['execute'] },
+    fs_list: fsListTool,
+    fs_read: fsReadTool,
+    fs_search: fsSearchTool,
+    fs_write: fsWriteTool,
+    ...buildDatabaseTools(prisma),
+    ...buildEmailTools(prisma),
+    ...buildCalendarTools(prisma),
+    ...buildObservabilityTools({ prisma, redis: deps.redis ?? null }),
   };
 
   return { ...builtIn, ...(deps.extra ?? {}) };

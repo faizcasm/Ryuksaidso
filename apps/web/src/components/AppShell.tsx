@@ -3000,7 +3000,7 @@ function TracesView({
                           <small>{step.tokens} tok</small>
                         </div>
                       </div>
-                      <pre>{pretty(step.output ?? step.input)}</pre>
+                      <StepOutput step={step} />
                       {step.error && (
                         <div className="step-error">{step.error}</div>
                       )}
@@ -4511,6 +4511,7 @@ function AdminView({
           </div>
         </div>
       </div>
+      <ObservabilitySection viewerRole={viewerRole} />
       <div className="admin-grid">
         <section className="panel">
           <PanelHeader
@@ -4851,6 +4852,396 @@ function AdminView({
         </div>
       </section>
     </div>
+  );
+}
+
+function StepOutput({ step }: { step: any }) {
+  const raw = step?.output ?? step?.input;
+  const presentation = presentationOf(raw);
+  if (presentation) return <ObsCard data={presentation} />;
+  if (raw && typeof raw === "object") {
+    const answer = (raw as any).answer;
+    if (typeof answer === "string" && answer.trim()) {
+      const toolResults = Array.isArray((raw as any).toolResults) ? (raw as any).toolResults : [];
+      const cards = toolResults
+        .map((entry: any) => presentationOf(entry?.result ?? entry?.result?.output))
+        .filter(Boolean) as ObsPresentationData[];
+      return (
+        <div className="step-answer">
+          <p>{answer}</p>
+          {cards.map((card, index) => (
+            <ObsCard data={card} key={index} />
+          ))}
+          <details className="step-raw">
+            <summary>Plan &amp; tool details</summary>
+            <pre>{pretty(raw)}</pre>
+          </details>
+        </div>
+      );
+    }
+    const nested = presentationOf((raw as any).output);
+    if (nested) return <ObsCard data={nested} />;
+  }
+  return <pre>{pretty(raw)}</pre>;
+}
+
+type ObsMetricChip = { label: string; value: string; tone?: "good" | "warn" | "bad" };
+type ObsServiceCard = {
+  name: string;
+  ok?: boolean | null;
+  detail?: string;
+  latencyMs?: number | null;
+};
+type ObsErrorRow = {
+  t?: string;
+  level?: string;
+  source?: string;
+  status?: number;
+  method?: string;
+  path?: string;
+  requestId?: string | null;
+  message?: string;
+  meta?: any;
+};
+type ObsPresentationData = {
+  kind?: string;
+  title?: string;
+  status?: "healthy" | "degraded" | "critical" | "unknown";
+  generatedAt?: string;
+  metrics?: ObsMetricChip[];
+  services?: ObsServiceCard[];
+  errors?: ObsErrorRow[];
+  rootCause?: string;
+  actions?: Array<{ label: string; url: string; disabled?: boolean }>;
+  sources?: string[];
+};
+
+function presentationOf(value: any): ObsPresentationData | null {
+  if (!value || typeof value !== "object") return null;
+  if (value.presentation && typeof value.presentation === "object" && value.presentation.kind === "observability")
+    return value.presentation as ObsPresentationData;
+  if (value.kind === "observability") return value as ObsPresentationData;
+  return null;
+}
+
+function ObsCard({ data }: { data: ObsPresentationData }) {
+  const status = data.status ?? "unknown";
+  const errors = (data.errors ?? []).slice(0, 4);
+  return (
+    <div className={`obs-card obs-${status}`}>
+      <div className="obs-card-head">
+        <span className={`obs-status-pill ${status}`}>{status.toUpperCase()}</span>
+        <b>{data.title || "Observability"}</b>
+        {data.generatedAt && <small>{formatWhen(data.generatedAt)}</small>}
+      </div>
+      {!!(data.metrics ?? []).length && (
+        <div className="obs-metrics-row">
+          {(data.metrics ?? []).map((metric) => (
+            <span className={`obs-chip ${metric.tone ?? ""}`} key={metric.label}>
+              <small>{metric.label}</small>
+              <b>{metric.value}</b>
+            </span>
+          ))}
+        </div>
+      )}
+      {!!(data.services ?? []).length && (
+        <div className="obs-services-mini">
+          {(data.services ?? []).map((service) => (
+            <span key={service.name} className={service.ok === false ? "down" : service.ok ? "up" : ""} title={service.detail}>
+              <i className="obs-dot" />
+              {service.name}
+            </span>
+          ))}
+        </div>
+      )}
+      {!!errors.length && (
+        <div className="obs-errors-mini">
+          {errors.map((error, index) => (
+            <div key={index}>
+              <code>{error.t ? new Date(error.t).toLocaleTimeString() : "--:--:--"}</code>
+              {error.status ? (
+                <b className="obs-code bad">{error.status}</b>
+              ) : (
+                <b className="obs-code warn">{String(error.level ?? "error")}</b>
+              )}
+              <span>{error.method ? `${error.method} ${error.path}` : String(error.message ?? "").slice(0, 140)}</span>
+              {error.requestId && <code className="obs-rid">{error.requestId}</code>}
+            </div>
+          ))}
+        </div>
+      )}
+      {data.rootCause && <p className="obs-rootcause">{data.rootCause}</p>}
+      <div className="obs-card-foot">
+        <div className="obs-sources">
+          {(data.sources ?? []).map((source) => (
+            <span className="obs-source" key={source}>
+              {source}
+            </span>
+          ))}
+        </div>
+        {(data.actions ?? []).map((action) => (
+          <a className="obs-action" href={action.url} target="_blank" rel="noreferrer" key={action.label}>
+            {action.label} →
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ObservabilitySection({ viewerRole }: { viewerRole: string }) {
+  const allowed = viewerRole === "OWNER" || viewerRole === "ADMIN";
+  const [summary, setSummary] = useState<any>(null);
+  const [errorsData, setErrorsData] = useState<any>(null);
+  const [requests, setRequests] = useState<any>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!allowed) return;
+    let alive = true;
+    const load = async () => {
+      try {
+        const [nextSummary, nextErrors] = await Promise.all([
+          api<any>("/admin/observability/summary"),
+          api<any>("/admin/observability/errors?sinceMinutes=60&limit=12"),
+        ]);
+        if (!alive) return;
+        setSummary(nextSummary);
+        setErrorsData(nextErrors);
+        setLoadError(null);
+      } catch (error) {
+        if (!alive) return;
+        const status = (error as { status?: number })?.status;
+        setLoadError(status === 403 ? null : String((error as Error)?.message ?? "Observability unavailable"));
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, 30_000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [allowed]);
+
+  const refresh = async () => {
+    setBusy(true);
+    try {
+      const [nextSummary, nextErrors] = await Promise.all([
+        api<any>("/admin/observability/summary"),
+        api<any>("/admin/observability/errors?sinceMinutes=60&limit=12"),
+      ]);
+      setSummary(nextSummary);
+      setErrorsData(nextErrors);
+      setLoadError(null);
+    } catch (error) {
+      const status = (error as { status?: number })?.status;
+      if (status !== 403) setLoadError(String((error as Error)?.message ?? "Observability unavailable"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const loadRequests = async () => {
+    if (requests) {
+      setRequests(null);
+      return;
+    }
+    try {
+      setRequests(await api<any>("/admin/observability/requests?sinceMinutes=1440&limit=40"));
+    } catch {}
+  };
+
+  if (!allowed) return null;
+  const presentation: ObsPresentationData | null = summary?.presentation ?? null;
+  const status = presentation?.status ?? "unknown";
+  const stats = summary?.stats ?? null;
+  const backends = summary?.backends ?? null;
+  const errorRows: ObsErrorRow[] = errorsData?.errors ?? [];
+  const grafanaUrl = backends?.grafana?.url as string | undefined;
+  const grafanaReady = Boolean(backends?.grafana?.configured && grafanaUrl);
+
+  return (
+    <section className="panel obs-panel" id="observability">
+      <PanelHeader
+        icon={Activity}
+        title="Observability"
+        sub={summary ? `Live system status · updated ${formatWhen(summary.generatedAt)}` : "Live system status"}
+      />
+      <div className="obs-toolbar">
+        <span className={`obs-status-pill ${status}`}>
+          {summary ? status.toUpperCase() : "LOADING"}
+        </span>
+        <div className="obs-sources">
+          {(backends?.sources ?? ["api-native"]).map((source: string) => (
+            <span className="obs-source" key={source}>
+              {source}
+            </span>
+          ))}
+        </div>
+        <div className="obs-actions">
+          <button className="ghost" onClick={() => void refresh()} disabled={busy}>
+            <RefreshCw size={13} className={busy ? "spin" : ""} />
+            {busy ? "Refreshing…" : "Refresh"}
+          </button>
+          <button className="ghost" onClick={() => void loadRequests()}>
+            {requests ? "Hide requests" : "Request logs"}
+          </button>
+          {grafanaReady ? (
+            <a className="ghost obs-action" href={grafanaUrl} target="_blank" rel="noreferrer">
+              Open Grafana
+            </a>
+          ) : (
+            <button className="ghost" disabled title="Set GRAFANA_URL to expose Grafana in the browser">
+              Open Grafana
+            </button>
+          )}
+        </div>
+      </div>
+      {loadError && <p className="obs-note">{loadError}</p>}
+      <div className="obs-stat-grid">
+        {(presentation?.metrics ?? []).map((metric) => (
+          <div className={`obs-stat ${metric.tone ?? ""}`} key={metric.label}>
+            <span>{metric.label}</span>
+            <b>{metric.value}</b>
+          </div>
+        ))}
+        {!summary && !loadError && (
+          <p className="obs-empty">Collecting live metrics…</p>
+        )}
+        {summary && !(presentation?.metrics ?? []).length && (
+          <p className="obs-empty">No metrics available.</p>
+        )}
+      </div>
+      {presentation?.rootCause && (
+        <div className="obs-rootcause">
+          <AlertTriangle size={14} />
+          <span>{presentation.rootCause}</span>
+        </div>
+      )}
+      <div className="obs-columns">
+        <div>
+          <h3>Service health</h3>
+          <div className="obs-services">
+            {(summary?.services ?? []).map((service: ObsServiceCard) => (
+              <div
+                className={`health-card ${service.ok === undefined ? "unknown" : service.ok ? "up" : "down"}`}
+                key={service.name}
+              >
+                <span className="health-dot" />
+                <div>
+                  <b>{service.name}</b>
+                  <span>{service.detail}</span>
+                </div>
+              </div>
+            ))}
+            {!(summary?.services ?? []).length && <p className="obs-empty">No service checks yet.</p>}
+          </div>
+        </div>
+        <div>
+          <h3>
+            Traffic <small>· last {stats?.windowMinutes ?? 60} min</small>
+          </h3>
+          {stats ? (
+            <div className="obs-traffic">
+              <div className="obs-traffic-row">
+                <span>Requests</span>
+                <b>{stats.total}</b>
+              </div>
+              <div className="obs-traffic-row">
+                <span>Requests / min</span>
+                <b>{stats.requestsPerMinute}</b>
+              </div>
+              <div className="obs-traffic-row">
+                <span>Avg / p95 latency</span>
+                <b>
+                  {stats.avgMs} ms / {stats.p95Ms} ms
+                </b>
+              </div>
+              <div className="obs-traffic-row">
+                <span>4xx / 5xx</span>
+                <b className={stats.errors5xx ? "bad-text" : ""}>
+                  {stats.clientErrors4xx} / {stats.errors5xx}
+                </b>
+              </div>
+              <div className="obs-status-chips">
+                {(stats.byStatus ?? []).slice(0, 8).map((entry: { status: number; count: number }) => (
+                  <span
+                    key={entry.status}
+                    className={`obs-code ${entry.status >= 500 ? "bad" : entry.status >= 400 ? "warn" : "ok"}`}
+                  >
+                    {entry.status} × {entry.count}
+                  </span>
+                ))}
+              </div>
+              {!!(stats.topErrorPaths ?? []).length && (
+                <div className="obs-errorpaths">
+                  {(stats.topErrorPaths as any[]).map((entry, index) => (
+                    <div key={index}>
+                      <b className="obs-code bad">{entry.status}</b>
+                      <span>{entry.path}</span>
+                      <small>{entry.count}×</small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="obs-empty">No request data yet.</p>
+          )}
+        </div>
+      </div>
+      <div className="obs-errors" id="obs-errors">
+        <h3>
+          Recent errors <small>· {errorsData?.count ?? errorRows.length}</small>
+        </h3>
+        {!errorRows.length && <p className="obs-empty">No errors captured in this window.</p>}
+        {errorRows.map((error, index) => (
+          <details className="obs-error-row" key={index}>
+            <summary>
+              <code>{error.t ? new Date(error.t).toLocaleTimeString() : "--:--:--"}</code>
+              {error.status ? (
+                <b className="obs-code bad">{error.status}</b>
+              ) : (
+                <b className="obs-code warn">{String(error.level ?? "error")}</b>
+              )}
+              <span className="obs-error-msg">
+                {error.method ? `${error.method} ${error.path}` : String(error.message ?? "").slice(0, 140)}
+              </span>
+              {error.requestId && <code className="obs-rid">{error.requestId}</code>}
+              <span className="obs-src">{error.source}</span>
+            </summary>
+            <div className="obs-error-detail">
+              <p>{error.message}</p>
+              {error.meta && <pre>{pretty(error.meta)}</pre>}
+            </div>
+          </details>
+        ))}
+      </div>
+      {requests && (
+        <div className="obs-requests">
+          <h3>
+            Request logs <small>· last {requests.sinceMinutes} min · {requests.entries?.length ?? 0} of {requests.totalMatched ?? 0}</small>
+          </h3>
+          <div className="obs-table">
+            {(requests.entries ?? []).map((entry: any, index: number) => (
+              <div key={index}>
+                <code>{new Date(entry.t).toLocaleTimeString()}</code>
+                <b>{entry.method}</b>
+                <span>{entry.path}</span>
+                <b className={`obs-code ${entry.status >= 500 ? "bad" : entry.status >= 400 ? "warn" : "ok"}`}>
+                  {entry.status}
+                </b>
+                <small>{entry.ms} ms</small>
+                {entry.requestId && <code className="obs-rid">{entry.requestId}</code>}
+              </div>
+            ))}
+            {!(requests.entries ?? []).length && <p className="obs-empty">No requests in this window.</p>}
+          </div>
+        </div>
+      )}
+      {errorsData?.lokiNote && <p className="obs-note">{errorsData.lokiNote}</p>}
+    </section>
   );
 }
 

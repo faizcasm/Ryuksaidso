@@ -21,7 +21,7 @@
 9. [Data model (database)](#9-data-model-database)
 10. [The API](#10-the-api)
 11. [Agent runtime pipeline](#11-agent-runtime-pipeline)
-12. [Tool gateway and the 13 built-in tools](#12-tool-gateway-and-the-13-built-in-tools)
+12. [Tool gateway and the 46 built-in tools](#12-tool-gateway-and-the-46-built-in-tools)
 13. [Model routing (LLM providers)](#13-model-routing-llm-providers)
 14. [Async execution & reliability](#14-async-execution--reliability)
 15. [Security model](#15-security-model)
@@ -104,7 +104,7 @@ The codebase started life as a support workspace and was reworked into a multi-t
 ### For developers / as a portfolio system
 It demonstrates a wide, genuinely hard backend surface end-to-end:
 
-- distributed job processing (BullMQ), Postgres data modeling (23 models), multi-tenant RBAC, session/OAuth security, policy enforcement, LLM provider resilience, observability, and a full React control plane.
+- distributed job processing (BullMQ), Postgres data modeling (25 models), multi-tenant RBAC, session/OAuth security, policy enforcement, LLM provider resilience, observability, and a full React control plane.
 
 ### For the AI-engineering discipline
 It encodes the thesis that **an agent is a system, not a prompt**: untrusted planner → deterministic gateway → evidence-backed synthesis, with humans in the loop exactly where consequences are irreversible.
@@ -154,7 +154,7 @@ The control plane is a single responsive app (`apps/web`) with **14 main section
 |---|---|
 | **Command Center** | Live operational overview: KPI cards, **24-hour throughput area chart**, status-mix bar, **provider-split donut**, **top agents leaderboard**, **awaiting-approval panel with inline Approve/Reject**, latest runs |
 | **Run Lab** | Launch a run against any agent with prompt/environment/trigger; live wait states (`QUEUED → RUNNING → WAITING_APPROVAL → COMPLETED/FAILED`) |
-| **Agents** | Agent registry: create/edit with instructions, **custom system prompt**, **category-grouped tool picker** (13 tools with approval markers), knowledge scope, enable/disable, version publishing, "custom prompt" badge |
+| **Agents** | Agent registry: create/edit with instructions, **custom system prompt**, **category-grouped tool picker** (46 tools with approval markers), knowledge scope, enable/disable, version publishing, "custom prompt" badge |
 | **Projects** | Isolate agent ownership and execution history per project |
 | **Tickets** | Support workflow: create/inspect tickets, run the agent on them, **conversation thread** (human + assistant messages), approval-gated replies |
 | **Traces** | Trace explorer: list runs, inspect ordered planner/tool/synthesizer steps with JSON payloads, latency, tokens, errors; retry action |
@@ -277,7 +277,7 @@ Global UX elements: sticky topbar with **theme toggle** and a **Refresh button t
 |---|---|
 | `apps/worker` | BullMQ consumer (`agent-runs`), pino logging, provider retry wrapper |
 | `packages/agent-runtime` | `executeAgentRun()` — planner → tool gateway → synthesizer orchestration + step persistence |
-| `packages/agent-tools` | Tool registry: `calc.ts`, `data.ts` (offline/data tools), `external.ts` (network tools), `mcp.ts`, `index.ts`, `types.ts`, `util.ts` (~1,100 lines) + `@modelcontextprotocol/sdk` |
+| `packages/agent-tools` | Tool registry: `calc.ts`, `data.ts` (offline/data tools), `external.ts` (network tools), `github-tools.ts`, `fs-tools.ts`, `database-tools.ts`, `email-tools.ts`, `calendar-tools.ts`, `observability-tools.ts`, `mcp.ts`, `index.ts`, `types.ts`, `util.ts` (~3,500 lines) + `@modelcontextprotocol/sdk` |
 
 ### Data & infra
 | Piece | Choice |
@@ -297,7 +297,7 @@ Global UX elements: sticky topbar with **theme toggle** and a **Refresh button t
 ```text
 ryuksaidsoproductionready/
 ├── apps/
-│   ├── api/                  # Express 5 HTTP boundary (30 TS files, ~4,100 lines)
+│   ├── api/                  # Express 5 HTTP boundary (38 TS files, ~5,600 lines)
 │   │   ├── src/
 │   │   │   ├── server.ts
 │   │   │   ├── routes/       # auth, account, admin, app, approvals, control, docs, evaluations
@@ -305,8 +305,8 @@ ryuksaidsoproductionready/
 │   │   │   ├── services/     # email, llm (providers+fallback), queue, tools
 │   │   │   ├── agents/       # runtime.ts, evaluate.ts
 │   │   │   ├── lib/          # auth, config, db, logger, metrics, redis
-│   │   │   └── __tests__/    # 5 vitest suites (29 tests)
-│   │   └── prisma/           # schema.prisma (423 lines) + 8 migrations
+│   │   │   └── __tests__/    # 12 vitest suites (166 tests)
+│   │   └── prisma/           # schema.prisma (466 lines) + 11 migrations
 │   ├── web/                  # Next.js 15 control plane
 │   │   └── src/
 │   │       ├── app/          # routes: /, /auth, /dashboard, /docs, /architecture,
@@ -315,7 +315,7 @@ ryuksaidsoproductionready/
 │   └── worker/               # BullMQ consumer (index.ts, ~220 lines)
 ├── packages/
 │   ├── agent-runtime/        # executeAgentRun pipeline (index.ts, ~12.7 KB)
-│   └── agent-tools/          # 13 built-in tools + MCP bridge (~1,115 lines)
+│   └── agent-tools/          # 46 built-in tools + MCP bridge (~3,500 lines)
 ├── infra/                    # prometheus.yml, loki/, promtail/, grafana/provisioning/, llm-proxy.js
 ├── docs/                     # FEATURES.md, PROJECT_PITCH.md, PRODUCTION-SETUP.md, DEMO.md
 ├── docker-compose.yml        # 11 services
@@ -332,7 +332,7 @@ ryuksaidsoproductionready/
 
 ## 9. Data model (database)
 
-**23 models + 8 enums** in `apps/api/prisma/schema.prisma`.
+**25 models + 8 enums** in `apps/api/prisma/schema.prisma`.
 
 ### Identity & tenancy
 | Model | Purpose |
@@ -365,12 +365,14 @@ ryuksaidsoproductionready/
 | `Memory` | `MemoryKind`-typed memory entries |
 | `Evaluation` | Persisted datasets, per-case results, score, provider used |
 | `AuditLog` | Security/audit stream (actor, action, target, request id) |
+| `EmailRecord` | Sent/received agent email (direction, subject, redacted body, IMAP uid, thread ids) |
+| `CalendarEvent` | Org-scoped calendar entries (title, start/end, all-day, optional run link) |
 
 ### Key enums
 `Role` (OWNER/ADMIN/AGENT/VIEWER) · `UserRole` (USER/ADMIN) · `TicketStatus` · `Priority` · `RunStatus` (QUEUED/RUNNING/WAITING_APPROVAL/COMPLETED/FAILED) · `MemoryKind` · `LLMProvider` (OMNIROUTE/OLLAMA) · `ProjectStatus`
 
 ### Migrations
-8 migrations including `workspace_security`, `document_agent_scope`, `agent_system_prompt`, `set_ollama_model_default`, `add_user_role` — applied automatically by the `migrate` service on `docker compose up`.
+11 migrations including `workspace_security`, `document_agent_scope`, `agent_system_prompt`, `set_ollama_model_default`, `add_user_role`, `omniroute_default_provider`, `email_and_calendar` — applied automatically by the `migrate` service on `docker compose up`.
 
 ---
 
@@ -450,7 +452,7 @@ Key properties:
 
 ---
 
-## 12. Tool gateway and the 13 built-in tools
+## 12. Tool gateway and the 46 built-in tools
 
 One shared registry (`packages/agent-tools`) — **the API serves metadata, the worker executes, so the two never drift.**
 
@@ -464,13 +466,46 @@ One shared registry (`packages/agent-tools`) — **the API serves metadata, the 
 | 6 | `current_weather` | Utilities | `weather:read` | Never | Open-Meteo primary → **Nominatim geocode + met.no forecast fallbacks**; 15 s budget |
 | 7 | `unit_convert` | Utilities | `unit:use` | Never | Offline: temperature/length/mass/data/volume/speed/time; word aliases; rejects cross-family |
 | 8 | `text_tools` | Utilities | `text:use` | Never | Offline: stats, base64 encode/decode (unicode-safe), slugify |
-| 9 | `web_search` | Web | `web:read` | Never | DuckDuckGo → Bing → Wikipedia fallback |
-| 10 | `github` | Web | `github:read` | Never | search_repos / get_repo / list_issues / search_issues; optional `GITHUB_TOKEN` |
+| 9 | `web_search` | Web | `web:read` | Never | DuckDuckGo → Bing → Wikipedia fallback; `type` web/news/docs (Google News RSS with dates+sources), `domains` filter, `freshness` day/week/month/year recency window, fallback reported in `note` |
+| 10 | `github` | Integrations | `github:read` | Never | search_repos / get_repo / list_issues / search_issues; optional `GITHUB_TOKEN` |
 | 11 | `currency_convert` | Web | `currency:read` | Never | ECB reference rates via Frankfurter (keyless) |
 | 12 | `dictionary` | Web | `dictionary:read` | Never | Dictionary API → **Wiktionary REST fallback** |
 | 13 | `news` | Web | `news:read` | Never | Hacker News front page/topic search via Algolia (keyless) |
+| 14 | `fetch_page` | Web | `web:read` | Never | Readable text extraction with `query`-ranked passages; private/internal hosts and redirect hops SSRF-checked |
+| 15 | `github_search_repositories` | Integrations | `github:read` | Never | Discrete GitHub tool, optional `GITHUB_TOKEN` |
+| 16 | `github_read_file` | Integrations | `github:read` | Never | Contents API with base64 decoding |
+| 17 | `github_get_pull_request` | Integrations | `github:read` | Never | PR details + review state |
+| 18 | `github_create_issue` | Integrations | `github:write` | **Always** | Side effect → approval-gated |
+| 19 | `github_update_issue` | Integrations | `github:write` | **Always** | Title/body/labels/state |
+| 20 | `github_comment_issue` | Integrations | `github:write` | **Always** | Issue comment |
+| 21 | `github_create_branch` | Integrations | `github:write` | **Always** | Branch from ref |
+| 22 | `github_create_pull_request` | Integrations | `github:write` | **Always** | Head → base PR |
+| 23 | `fs_list` | Files | `fs:read` | Never | Workspace sandbox `<FILES_ROOT>/<organizationId>` |
+| 24 | `fs_read` | Files | `fs:read` | Never | Size-capped reads, path traversal rejected |
+| 25 | `fs_search` | Files | `fs:read` | Never | Filename + content grep across the sandbox |
+| 26 | `fs_write` | Files | `fs:write` | **Always** | Creates/overwrites inside the sandbox only |
+| 27 | `search_email` | Email | `email:read` | Never | IMAP search; secrets redacted before storage |
+| 28 | `read_email` | Email | `email:read` | Never | IMAP fetch of one message; degrades to stored messages when IMAP is unreachable |
+| 29 | `send_email` | Email | `email:write` | **Always (confirm)** | SMTP out, persisted as `EmailRecord` |
+| 30 | `reply_email` | Email | `email:write` | **Always (confirm)** | Threaded reply via SMTP |
+| 31 | `calendar_list_events` | Calendar | `calendar:read` | Never | Org-scoped `CalendarEvent` range query |
+| 32 | `calendar_create_event` | Calendar | `calendar:write` | **Always** | Start/end/title/location |
+| 33 | `calendar_update_event` | Calendar | `calendar:write` | **Always** | Partial updates |
+| 34 | `calendar_delete_event` | Calendar | `calendar:write` | **Always** | Removal |
+| 35 | `database_schema` | Database | `database:read` | Never | **Admin-only** (OWNER/ADMIN), 403 otherwise |
+| 36 | `database_query` | Database | `database:read` | Never | **Admin-only**; single statement, `SELECT`/`WITH` only, dangerous functions blocked, secret columns redacted |
+| 37 | `database_explain` | Database | `database:read` | Never | **Admin-only**; `EXPLAIN` on read-only SQL |
+| 38 | `database_insert` | Database | `database:write` | **Always** | **Admin-only**; identifier-validated columns, forced `organizationId` |
+| 39 | `database_update` | Database | `database:write` | **Always** | **Admin-only**; non-empty `where` required, forced `organizationId` |
+| 40 | `get_observability_summary` | Observability | `observability:read` | Never | **Admin-only**; services + system metrics + request stats + presentation payload |
+| 41 | `get_service_health` | Observability | `observability:read` | Never | **Admin-only**; live probes (Postgres/Redis/API/Web/LLM) |
+| 42 | `get_system_metrics` | Observability | `observability:read` | Never | **Admin-only**; CPU/memory/disk/load from `/proc` + `statfs` |
+| 43 | `get_recent_errors` | Observability | `observability:read` | Never | **Admin-only**; ring buffer + Loki, redacted, root-cause hint |
+| 44 | `search_request_logs` | Observability | `observability:read` | Never | **Admin-only**; status/method/path/text filters with request IDs |
+| 45 | `prometheus_query` | Observability | `observability:read` | Never | **Admin-only**; PromQL instant/range, auto-detects the backend |
+| 46 | `loki_query` | Observability | `observability:read` | Never | **Admin-only**; LogQL, auto-detects the backend |
 
-**Categories for the grouped picker:** Knowledge · Tickets · Utilities · Web · Integrations.
+**Categories for the grouped picker:** Knowledge · Tickets · Utilities · Web · Integrations · Files · Email · Calendar · Database · Observability.
 
 ### MCP (Model Context Protocol)
 - Configure any MCP server via `MCP_SERVERS` (stdio command or HTTP URL).
@@ -596,8 +631,8 @@ Available only to **system admins** (`userRole=ADMIN`), separate from workspace 
 | **Rate limits** | `RATE_LIMIT_MAX` (600), `RATE_LIMIT_WINDOW_MS` (60000) |
 | **LLM** | `OMNIROUTE_URL/API/MODEL` (+`_DOCKER`), `OLLAMA_URL/API/MODEL` (+`_DOCKER`), `DOCKER_RUNTIME` |
 | **OAuth** | `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI`, `GITHUB_CLIENT_ID/SECRET/REDIRECT_URI`, `ENABLE_OAUTH` |
-| **Tools** | `GITHUB_TOKEN`, `MCP_SERVERS` |
-| **Email** | `SMTP_HOST/PORT/SECURE/USER/PASSWORD`, `EMAIL_FROM`, `ENABLE_PASSWORD_RESET` |
+| **Tools** | `GITHUB_TOKEN`, `MCP_SERVERS`, `FILES_ROOT` |
+| **Email** | `SMTP_HOST/PORT/SECURE/USER/PASSWORD`, `EMAIL_FROM`, `IMAP_HOST/PORT/USER/PASSWORD` (derived from `SMTP_*` when empty), `ENABLE_PASSWORD_RESET` |
 | **Worker** | `WORKER_CONCURRENCY` (4), `WORKER_RATE_LIMIT_MAX`, `WORKER_RATE_LIMIT_DURATION_MS` |
 | **Observability** | `GRAFANA_ADMIN_USER/PASSWORD`, `PROMETHEUS_URL`, `LOKI_URL`, `GRAFANA_URL` |
 | **Feature flags** | `ENABLE_ADMIN`, `ENABLE_KNOWLEDGE_BASE`, `ENABLE_EVALUATIONS`, `ENABLE_APPROVALS`, `ENABLE_POLICIES` |
@@ -656,9 +691,9 @@ pnpm test       # vitest (API suites)
 
 | Layer | Tool | Current state |
 |---|---|---|
-| **Unit/integration** | Vitest (`apps/api`) | **29 tests / 5 suites passing** — calculator safety, knowledge terms, 13-tool registry & metadata, `unit_convert`, `text_tools`, **weather two-source fallback (stubbed fetch)**, auth, server routes, LLM fallback (OmniRoute→Ollama), evaluator |
+| **Unit/integration** | Vitest (`apps/api`) | **166 tests / 12 suites passing** — calculator safety, knowledge terms, 46-tool registry & metadata, `unit_convert`, `text_tools`, **weather two-source fallback (stubbed fetch)**, tool governance (admin-only 403s, SQL/file-system guards, secret redaction, approval flags, search filters), auth, server routes, LLM fallback (OmniRoute→Ollama), evaluator |
 | **Static** | `tsc --noEmit` | **5/5 workspaces clean** |
-| **UI regression (browser)** | scripted Playwright harness (test-only, never shipped) | `ux-ui.mjs` → **33/33** (panels, charts, refresh, toast dismiss/close, theming, zero console errors); `tools-ui.mjs` → all pass (13 tools in picker, prompt badge) |
+| **UI regression (browser)** | scripted Playwright harness (test-only, never shipped) | `ux-ui.mjs` → **33/33** (panels, charts, refresh, toast dismiss/close, theming, zero console errors); `tools-ui.mjs` → all pass (46 tools in picker, prompt badge) |
 | **End-to-end** | `tools-e2e.sh` against the live Docker stack | **ALL PASS (50+ checks)**: registry, agent+prompt persistence, 4 completed LLM runs (time/calculator, weather with real conditions, web_search, github, dedicated **new-tools run**), system-prompt persona in answers, ticket → OmniRoute → approval → continuation + reply, evaluation answered by OmniRoute with per-case results |
 | **Live smokes** | curl/node against running services | 72 °F→22.22 °C, 10 km→6.21 mi, unicode base64 round-trip, 250 USD→23955 INR (ECB), Wiktionary fallback, HN list, weather London 18.6 °C + forced-fallback Tokyo 21.2 °C, admin overview payload, `no-store` headers |
 
@@ -674,7 +709,7 @@ Working end-to-end today:
 - ✅ Multi-tenant sign-up/login (password + Google/GitHub OAuth), verification, recovery, sessions, API keys
 - ✅ Projects, agents, immutable versions, custom system prompts, grouped tool picker
 - ✅ Async runs with full trace persistence, retry-as-new-run, approval continuation
-- ✅ 13 built-in tools + MCP, tenant-scoped knowledge retrieval, policy gating
+- ✅ 46 built-in tools + MCP, tenant-scoped knowledge retrieval, policy gating
 - ✅ Tickets with threaded replies; evaluations with persisted scores
 - ✅ OmniRoute-first/Ollama-fallback routing with per-run provider recording
 - ✅ Admin portal with fresh data, charts and live system health
@@ -724,4 +759,4 @@ Engineering hygiene notes:
 
 ### TL;DR
 
-**RYUKSAIDSO = a production control plane for AI agents.** Teams design versioned agents, run them asynchronously on Redis/BullMQ, trace every planner/tool/synthesis step, gate side effects behind human approvals, evaluate regressions, and watch it all on charts — with PostgreSQL as the source of truth, OmniRoute/Ollama model routing with automatic fallback, 13 built-in tools plus MCP, full security hardening (tenancy, RBAC, hashed rotating sessions, CSRF, rate limits, audit), and Prometheus/Loki/Grafana observability. Stack: **TypeScript · Next.js 15 / React 19 · Express 5 · Prisma / PostgreSQL · Redis / BullMQ · Docker Compose.**
+**RYUKSAIDSO = a production control plane for AI agents.** Teams design versioned agents, run them asynchronously on Redis/BullMQ, trace every planner/tool/synthesis step, gate side effects behind human approvals, evaluate regressions, and watch it all on charts — with PostgreSQL as the source of truth, OmniRoute/Ollama model routing with automatic fallback, 46 built-in tools plus MCP, full security hardening (tenancy, RBAC, hashed rotating sessions, CSRF, rate limits, audit), and Prometheus/Loki/Grafana observability. Stack: **TypeScript · Next.js 15 / React 19 · Express 5 · Prisma / PostgreSQL · Redis / BullMQ · Docker Compose.**

@@ -34,7 +34,22 @@ Roles: `USER` (default at registration), `ADMIN`.
 - Bootstrap: emails listed in the `SYSTEM_ADMIN_EMAILS` env var (comma-separated, lowercased) are promoted to `ADMIN` at sign-in, token refresh and `/me`. The allowlist only promotes; explicit grants/revocations through the endpoint stay authoritative. Leave it empty to disable auto-promotion.
 - Other `/api/admin/*` routes (`overview`, `runs`, `audit`, member role management) accept workspace `OWNER`/`ADMIN` **or** a system admin via the `admin()` resolver.
 
-## 3. Frontend helpers (display only)
+### Admin-only agent tools
+
+Twelve tools carry the `adminOnly` flag and are restricted to workspace `OWNER`/`ADMIN` members (or a system admin):
+
+- **Database** (read/write): `database_schema`, `database_query`, `database_explain`, `database_insert`, `database_update` — single-statement, `SELECT`/`WITH`-only queries, identifier validation, parameterized values, secret-column redaction and forced `organizationId` on writes.
+- **Observability**: `get_observability_summary`, `get_service_health`, `get_system_metrics`, `get_recent_errors`, `search_request_logs`, `prometheus_query`, `loki_query` — read-only, secrets redacted at capture and read time, every execution audit-logged.
+
+Enforced on the server in three layers:
+
+1. `GET /api/tools` filters `adminOnly` tools out of the catalog for non-admin members (46 tools for admins, 34 for everyone else).
+2. The run-time tool gateway re-checks the caller's membership role when a run starts and returns `403 Forbidden` (recorded as a `tool.denied` audit event) if an admin tool is invoked by a non-admin.
+3. Each admin tool's own `execute` throws `statusCode: 403` before touching the database or any backend.
+
+All side-effecting tools (database writes, `fs_write`, `send_email`, `reply_email`, GitHub mutations, calendar mutations) set `requiresApproval: true` regardless of role — read-only tools (`search_email`, `read_email`, `fs_read`, `fs_list`, `fs_search`, GitHub reads, `fetch_page`, `web_search`, calendar reads) run automatically.
+
+## 4. Frontend helpers (display only)
 
 Located in `apps/web`:
 
@@ -49,7 +64,7 @@ const { isAdmin } = useUserRole();
 {isAdmin && <AdminMenuItem />}
 ```
 
-## 4. Security rules
+## 5. Security rules
 
 1. Never trust frontend role checks — every mutation is re-authorized on the API.
 2. Use `requireAdmin` (session-only) for platform-level actions; use `requireRole` for workspace actions.
@@ -58,7 +73,7 @@ const { isAdmin } = useUserRole();
 5. API keys authenticate as OWNER of their own organization only, never as system admins.
 6. Prisma enums/types constrain role values; invalid roles return `400 ValidationError`.
 
-## 5. Testing RBAC by hand
+## 6. Testing RBAC by hand
 
 ```bash
 # who am I (system role)
@@ -72,4 +87,4 @@ curl -s -X PATCH http://localhost:4001/api/admin/users/<userId>/role \
   -d '{"userRole":"ADMIN"}'
 ```
 
-Automated coverage lives in `apps/api/src/__tests__/middleware.test.ts` (CSRF, API-key and admin gates) and `auth.test.ts` / `auth-helpers.test.ts` (session and password flows).
+Automated coverage lives in `apps/api/src/__tests__/middleware.test.ts` (CSRF, API-key and admin gates), `tool-governance.test.ts` (admin-only tool gating, 403 enforcement, SQL/file guards, redaction) and `auth.test.ts` / `auth-helpers.test.ts` (session and password flows).

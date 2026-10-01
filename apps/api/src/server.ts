@@ -19,8 +19,9 @@ import { controlRouter } from './routes/control';
 import { accountRouter } from './routes/account';
 import { adminRouter } from './routes/admin';
 import { docsRouter } from './routes/docs';
-import { requestId, csrfProtection } from './middleware';
+import { requestId, csrfProtection, type AuthenticatedRequest } from './middleware';
 import { errorHandler, notFoundHandler } from './middleware-error';
+import { captureRequest, ObsRingTransport } from './lib/obs';
 
 function bounded<T>(fn: () => Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -48,6 +49,26 @@ export function createApp() {
   app.use(morgan('combined', {
     stream: { write: (line: string) => logger.http(line.trim()) }
   }));
+
+  app.use(morgan((_tokens, req, res) => {
+    const authReq = req as AuthenticatedRequest;
+    const status = Number(_tokens.status!(req, res) ?? 0);
+    const urlPath = String(_tokens.url!(req, res) ?? '').split('?')[0];
+    const responseTime = Number(_tokens['response-time']!(req, res) ?? 0);
+    captureRequest({
+      t: Date.now(),
+      method: String(_tokens.method!(req, res) ?? ''),
+      path: urlPath,
+      status,
+      ms: Number.isFinite(responseTime) ? responseTime : 0,
+      requestId: authReq.requestId ?? (String(req.headers['x-request-id'] ?? '') || undefined),
+      userId: authReq.user?.id,
+      ip: String(_tokens['remote-addr']!(req, res) ?? '') || undefined,
+    });
+    return null;
+  }));
+
+  logger.add(new ObsRingTransport());
 
   const limiter = rateLimit({
     windowMs: config.RATE_LIMIT_WINDOW_MS,

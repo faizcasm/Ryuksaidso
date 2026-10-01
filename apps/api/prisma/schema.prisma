@@ -76,9 +76,9 @@ model Organization {
   policies Policy[]
   sessions Session[]
   invitations WorkspaceInvitation[]
+  emailRecords EmailRecord[]
+  calendarEvents CalendarEvent[]
   llmProvider LLMProvider @default(OMNIROUTE)
-  // Must match an image that actually exists locally — see OLLAMA_MODEL in .env
-  // and migration 20260926150000_set_ollama_model_default.
   ollamaModel String @default("qwen2.5-coder:3b-instruct-q4_K_M")
   omnirouteModel String @default("")
   createdAt DateTime @default(now())
@@ -168,7 +168,6 @@ model Agent {
   name String
   slug String
   instructions String
-  /** Optional custom system prompt; overrides `instructions` at run time. */
   systemPrompt String?
   enabled Boolean @default(true)
   tools Json?
@@ -280,8 +279,6 @@ model Document {
   source String
   content String
   metadata Json?
-  // Optional knowledge scope: NULL = shared with every agent in the workspace,
-  // otherwise only that agent (and shared docs) retrieve it.
   agentId String?
   chunks DocumentChunk[]
   organization Organization @relation(fields:[organizationId],references:[id],onDelete:Cascade)
@@ -420,4 +417,45 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
   user User @relation(fields:[userId], references:[id], onDelete:Cascade)
   @@index([userId, expiresAt])
+}
+
+model EmailRecord {
+  id String @id @default(cuid())
+  organizationId String
+  direction String
+  status String
+  from String
+  to Json?
+  cc Json?
+  subject String
+  body String?
+  messageId String?
+  inReplyTo String?
+  provider String?
+  folder String?
+  uid Int?
+  runId String?
+  sentBy String?
+  createdAt DateTime @default(now())
+  organization Organization @relation(fields:[organizationId], references:[id], onDelete:Cascade)
+  @@index([organizationId, createdAt])
+  @@index([organizationId, subject])
+}
+
+model CalendarEvent {
+  id String @id @default(cuid())
+  organizationId String
+  title String
+  description String?
+  location String?
+  startAt DateTime
+  endAt DateTime
+  allDay Boolean @default(false)
+  url String?
+  createdBy String?
+  runId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  organization Organization @relation(fields:[organizationId], references:[id], onDelete:Cascade)
+  @@index([organizationId, startAt])
 }

@@ -21,12 +21,13 @@ The original support-workspace codebase has been reworked into a multi-tenant pl
 - Agent registry with enabled/disabled state and immutable version records (publishing pins `project.productionVersion`).
 - Async execution using Redis + BullMQ with retries and backoff.
 - Durable agent runs with persisted planner/tool/synthesizer trace steps.
-- Tool gateway with tenant-scoped retrieval and policy-gated write tools (13 built-in tools plus MCP servers via `MCP_SERVERS`).
+- Tool gateway with tenant-scoped retrieval and policy-gated write tools (46 built-in tools — knowledge, tickets, calculator/weather/news/currency/unit/dictionary/text, web search with news/docs/domain/recency filters, page fetch, 8 discrete GitHub tools, workspace file system, email, calendar — plus admin-only database and observability tools and MCP servers via `MCP_SERVERS`).
 - Human approval queue for consequential actions, including continuation runs after approval.
 - Run retry flow that creates a new persisted run instead of mutating history.
 - Knowledge documents stored in PostgreSQL with organization-scoped retrieval.
 - Evaluation endpoint for persisted regression datasets and pass/fail scores.
 - Prometheus metrics, Loki logs, health/readiness endpoints and Grafana provisioning.
+- Admin-gated observability: a live Admin section and `get_observability_summary` / `get_recent_errors` / `search_request_logs` / `prometheus_query` / `loki_query` tools backed by the API-native request/log ring buffer (auto-detects Prometheus and Loki when the stack runs), with secret redaction and audit-logged executions.
 - Responsive control-plane UI for dashboard, run lab, agent registry, projects, tickets, traces, evaluations, approvals, knowledge, policies, developer keys and admin analytics.
 
 ## Monorepo layout
@@ -136,7 +137,7 @@ curl -X POST https://ryuksaidso.faizcasm.me/api/auth/login \
 
 ## Environment variables
 
-`.env.example` is the complete template for local development (application URLs, Postgres, Redis, API/CORS, JWT/session TTLs, LLM providers, OAuth, agent tools, SMTP, worker, observability, feature flags); every value is self-describing or a clearly-marked placeholder. `.env.production.example` is the server-side template used by `docker-compose.prod.yml` on the instance (copy it to `/opt/ryuksaidso/.env`, which is the name compose reads).
+`.env.example` is the complete template for local development (application URLs, Postgres, Redis, API/CORS, JWT/session TTLs, LLM providers, OAuth, agent tools, SMTP/IMAP and file sandbox, worker, observability, feature flags); every value is self-describing or a clearly-marked placeholder. `.env.production.example` is the server-side template used by `docker-compose.prod.yml` on the instance (copy it to `/opt/ryuksaidso/.env`, which is the name compose reads).
 
 Key variables:
 
@@ -160,7 +161,7 @@ The workspace default provider/model is selected per organization in **Settings 
 ```bash
 pnpm lint         # ESLint flat config (eslint.config.mjs), no-unused-vars etc.
 pnpm typecheck    # tsc --noEmit across api/web/worker/packages
-pnpm test         # vitest — 137 tests in apps/api/src/__tests__
+pnpm test         # vitest — 166 tests in apps/api/src/__tests__
 pnpm build        # prisma generate + tsc for api/worker/packages, next build for web
 pnpm db:generate  # prisma client
 pnpm db:migrate   # apply Prisma migrations
@@ -170,7 +171,7 @@ Project convention: **source files must not contain comments** — no `//`, no `
 
 ## Testing summary
 
-- 11 vitest files, **137 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, evaluator, regressions and HTTP server routes.
+- 12 vitest files, **166 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, tool governance (admin-only gating, SQL/file-system guards, secret redaction, approval flags, search filters), evaluator, regressions and HTTP server routes.
 - Tests are hermetic (mocked Prisma/Redis) and run in CI after `pnpm db:generate`.
 - The worker/agent-runtime packages have no standalone unit tests; their behaviour is exercised through the API harness and the running stack.
 

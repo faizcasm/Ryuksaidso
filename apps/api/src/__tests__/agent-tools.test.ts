@@ -30,12 +30,20 @@ describe('tool registry', () => {
     const expected = [
       'search_knowledge', 'get_ticket', 'add_ticket_message',
       'current_time', 'calculator', 'current_weather',
-      'web_search', 'github',
+      'web_search', 'fetch_page', 'github',
       'currency_convert', 'unit_convert', 'dictionary', 'news', 'text_tools',
+      'github_search_repositories', 'github_read_file', 'github_create_issue', 'github_update_issue',
+      'github_comment_issue', 'github_create_branch', 'github_get_pull_request', 'github_create_pull_request',
+      'fs_list', 'fs_read', 'fs_search', 'fs_write',
+      'database_schema', 'database_query', 'database_explain', 'database_insert', 'database_update',
+      'search_email', 'read_email', 'send_email', 'reply_email',
+      'calendar_list_events', 'calendar_create_event', 'calendar_update_event', 'calendar_delete_event',
+      'get_observability_summary', 'get_service_health', 'get_system_metrics', 'get_recent_errors',
+      'search_request_logs', 'prometheus_query', 'loki_query',
     ];
     for (const name of expected) expect(Object.keys(tools)).toContain(name);
     expect(new Set(Object.values(tools).map(t => t.category))).toEqual(
-      new Set(['Knowledge', 'Tickets', 'Utilities', 'Web', 'Integrations']),
+      new Set(['Knowledge', 'Tickets', 'Utilities', 'Web', 'Integrations', 'Files', 'Database', 'Email', 'Calendar', 'Observability']),
     );
   });
 

@@ -1,4 +1,4 @@
-import { USER_AGENT, httpJson, softFail } from './util';
+import { USER_AGENT, assertPublicHttpUrl, httpJson, softFail } from './util';
 
 
 export const currentTimeTool = {
@@ -160,7 +160,7 @@ export const currentWeatherTool = {
 };
 
 
-type SearchHit = { title: string; url: string; snippet: string };
+type SearchHit = { title: string; url: string; snippet: string; publishedAt?: string; source?: string };
 
 const TAGS = (html: string) => html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 
@@ -183,7 +183,7 @@ async function duckDuckGo(query: string, limit: number): Promise<SearchHit[]> {
       try { href = decodeURIComponent(redirected[1]); } catch {  }
     }
     if (href.startsWith('//')) href = `https:${href}`;
-    hits.push({ title: TAGS(match[2]), url: href, snippet: '' });
+    hits.push({ title: TAGS(match[2]), url: href, snippet: '', source: 'duckduckgo' });
   }
   const snippets = /class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/(?:a|div|td)>/g;
   let idx = 0;
@@ -202,6 +202,7 @@ async function wikipedia(query: string, limit: number): Promise<SearchHit[]> {
     title: String(entry.title),
     url: `https://en.wikipedia.org/wiki/${encodeURIComponent(String(entry.title).replace(/ /g, '_'))}`,
     snippet: TAGS(String(entry.snippet ?? '')),
+    source: 'wikipedia',
   }));
   if (!hits.length) throw new Error(`No Wikipedia results for "${query}"`);
   return hits;
@@ -268,10 +269,13 @@ async function bing(query: string, limit: number): Promise<SearchHit[]> {
         const url = decodeBingUrl(link[1]);
         if (!url) continue;
         const description = /<description>([\s\S]*?)<\/description>/.exec(chunk);
+        const published = /<pubDate>([\s\S]*?)<\/pubDate>/.exec(chunk);
         hits.push({
           title: TAGS(decodeEntities(title[1])),
           url,
           snippet: TAGS(decodeEntities(description?.[1] ?? '')),
+          ...(published?.[1] && !Number.isNaN(Date.parse(published[1])) ? { publishedAt: new Date(published[1]).toISOString() } : {}),
+          source: 'bing',
         });
       }
       if (!hits.length) throw new Error('Bing returned no parseable results');
@@ -289,10 +293,90 @@ async function bing(query: string, limit: number): Promise<SearchHit[]> {
   throw new Error(lastError || 'Bing search failed');
 }
 
+async function googleNews(query: string, limit: number): Promise<SearchHit[]> {
+  const response = await fetch(
+    `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`,
+    { headers: { 'user-agent': USER_AGENT, accept: 'application/rss+xml, application/xml, text/xml, */*' }, signal: AbortSignal.timeout(9000) },
+  );
+  if (!response.ok) throw new Error(`Google News HTTP ${response.status}`);
+  const xml = await response.text();
+  const hits: SearchHit[] = [];
+  for (const chunk of xml.split('<item>').slice(1)) {
+    if (hits.length >= limit * 2) break;
+    const title = /<title>([\s\S]*?)<\/title>/.exec(chunk);
+    const link = /<link>([\s\S]*?)<\/link>/.exec(chunk);
+    if (!title || !link) continue;
+    const published = /<pubDate>([\s\S]*?)<\/pubDate>/.exec(chunk);
+    const source = /<source[^>]*>([\s\S]*?)<\/source>/.exec(chunk);
+    const description = /<description>([\s\S]*?)<\/description>/.exec(chunk);
+    hits.push({
+      title: TAGS(decodeEntities(title[1])),
+      url: TAGS(decodeEntities(link[1])),
+      snippet: TAGS(decodeEntities(description?.[1] ?? '')).slice(0, 400),
+      ...(published?.[1] && !Number.isNaN(Date.parse(published[1])) ? { publishedAt: new Date(published[1]).toISOString() } : {}),
+      ...(source?.[1] ? { source: TAGS(decodeEntities(source[1])) } : { source: 'google-news' }),
+    });
+  }
+  if (!hits.length) throw new Error('Google News returned no parseable results');
+  return hits;
+}
+
+const normalizeDomains = (value: unknown): string[] => {
+  const list = Array.isArray(value) ? value : typeof value === 'string' && value.trim() ? value.split(/[,\s]+/) : [];
+  return [...new Set(list.map((entry) => String(entry).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '')).filter(Boolean))]
+    .slice(0, 10);
+};
+
+const hitDomain = (url: string): string => {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+};
+
+const applyDomainFilter = (hits: SearchHit[], domains: string[]): SearchHit[] =>
+  domains.length ? hits.filter((hit) => domains.some((domain) => { const host = hitDomain(hit.url); return host === domain || host.endsWith(`.${domain}`); })) : hits;
+
+const FRESHNESS_WINDOWS: Record<string, number> = { day: 1, week: 7, month: 30, year: 365 };
+
+const freshnessCutoff = (freshness: string): Date | null => {
+  const days = FRESHNESS_WINDOWS[freshness];
+  if (!days) return null;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  return cutoff;
+};
+
+const applyFreshness = (hits: SearchHit[], cutoff: Date | null): { kept: SearchHit[]; undated: number } => {
+  if (!cutoff) return { kept: hits, undated: 0 };
+  const kept: SearchHit[] = [];
+  let undated = 0;
+  for (const hit of hits) {
+    if (!hit.publishedAt) {
+      undated += 1;
+      continue;
+    }
+    const published = new Date(hit.publishedAt);
+    if (!Number.isNaN(published.getTime()) && published >= cutoff) kept.push(hit);
+  }
+  return { kept, undated };
+};
+
+const DOCS_HOST_PATTERN = /(^|\.)(docs?|developer|developers|reference|learn|readthedocs|mdn|stackoverflow|stackexchange|npmjs|pypi|pkg\.go|crates|gitbook|notion|wiki|help|support|api|blog)\.|github\.io$|github\.com$|gitlab\.com$|\.readthedocs\./i;
+
+const docsScore = (url: string): number => (DOCS_HOST_PATTERN.test(hitDomain(url)) ? 1 : 0);
+
+const searchEnginesFor = (type: string, cutoff: Date | null): Array<[string, (q: string, n: number) => Promise<SearchHit[]>]> => {
+  if (type === 'news') return [['google-news', googleNews], ['bing', bing], ['duckduckgo', duckDuckGo]];
+  if (cutoff) return [['bing', bing], ['duckduckgo', duckDuckGo], ['wikipedia', wikipedia]];
+  return [['duckduckgo', duckDuckGo], ['bing', bing], ['wikipedia', wikipedia]];
+};
+
 export const webSearchTool = {
   name: 'web_search',
   description:
-    'Search the public web for a query and return ranked results with titles, URLs and snippets. Input: { query: string, maxResults?: number (1-8) }. Tries DuckDuckGo, then Bing, then Wikipedia.',
+    'Search the public web and return ranked results with titles, URLs and snippets. Input: { query: string, maxResults?: number (1-8), type?: "web" | "news" | "docs", domains?: string[] (only keep results from these domains), freshness?: "day" | "week" | "month" | "year" (only keep results published inside this window) }. type:"news" searches news outlets with publication dates; type:"docs" biases toward documentation/developer pages; include site:example.com in the query to target one site. Combine with fetch_page to read a result.',
   category: 'Web',
   scope: 'web:read',
   requiresApproval: false,
@@ -301,50 +385,183 @@ export const webSearchTool = {
       const query = String(input.query ?? input.prompt ?? '').trim();
       if (!query) throw new Error('A non-empty query is required');
       const maxResults = Math.min(Math.max(Number(input.maxResults ?? 5) || 5, 1), 8);
-      const engines: Array<[string, (q: string, n: number) => Promise<SearchHit[]>]> = [
-        ['duckduckgo', duckDuckGo],
-        ['bing', bing],
-        ['wikipedia', wikipedia],
-      ];
-      const unavailable: string[] = [];
+      const type = ['web', 'news', 'docs'].includes(String(input.type)) ? String(input.type) : 'web';
+      const domains = normalizeDomains(input.domains ?? input.domain);
+      const freshnessRaw = String(input.freshness ?? '').trim().toLowerCase();
+      const cutoff = FRESHNESS_WINDOWS[freshnessRaw] ? freshnessCutoff(freshnessRaw) : null;
+      const engines = searchEnginesFor(type, cutoff);
+      const attempts: string[] = [];
       for (const [engine, search] of engines) {
         try {
-          const results = await search(query, maxResults);
+          const raw = await search(query, maxResults * 2);
+          const domainFiltered = applyDomainFilter(raw, domains);
+          if (domains.length && !domainFiltered.length) {
+            attempts.push(`${engine}: no results from domains [${domains.join(', ')}]`);
+            continue;
+          }
+          const { kept, undated } = applyFreshness(domainFiltered, cutoff);
+          if (cutoff && !kept.length) {
+            attempts.push(`${engine}: no results with dates inside the last ${FRESHNESS_WINDOWS[freshnessRaw]} day(s)`);
+            continue;
+          }
+          const results = (type === 'docs' ? [...kept].sort((a, b) => docsScore(b.url) - docsScore(a.url)) : kept).slice(0, maxResults);
+          const notes = [
+            ...(cutoff && undated ? [`${undated} result(s) without a publication date were excluded by the recency filter.`] : []),
+            ...(attempts.length ? [attempts.join(' | ')] : []),
+          ];
           return {
             engine,
+            type,
             query,
             results,
-            ...(unavailable.length ? { note: `unavailable: ${unavailable.join(' | ')}` } : {}),
+            filters: {
+              ...(domains.length ? { domains } : {}),
+              ...(cutoff ? { freshness: freshnessRaw, publishedSince: cutoff.toISOString() } : {}),
+            },
+            ...(notes.length ? { note: notes.join(' | ') } : {}),
           };
         } catch (error) {
-          unavailable.push(`${engine}: ${(error as Error).message}`);
+          attempts.push(`${engine}: ${(error as Error).message}`);
         }
       }
-      return { error: `Web search failed: ${unavailable.join('; ')}` };
+      return { error: `Web search failed: ${attempts.join('; ')}` };
+    }),
+};
+
+const BLOCKED_TEXT_TYPES = /pdf|zip|gzip|octet-stream|image\/|video\/|audio\/|font\//i;
+
+const decodeHtmlEntities = (text: string): string =>
+  decodeEntities(text)
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)));
+
+function htmlToText(html: string): { title: string; description: string; text: string } {
+  const title = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1]?.trim() ?? '';
+  const description = /<meta[^>]+name=["']description["'][^>]+content=["']([^"']*)["']/i.exec(html)?.[1] ?? '';
+  const cleaned = html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<svg[\s\S]*?<\/svg>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<\/(p|div|section|article|li|tr|h[1-6]|blockquote|pre|br)>/gi, '\n')
+    .replace(/<(br|hr)\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ');
+  const text = decodeHtmlEntities(cleaned)
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return { title: decodeHtmlEntities(title), description: decodeHtmlEntities(description).trim(), text };
+}
+
+const relevantPassages = (text: string, query: string): Array<{ text: string; score: number }> => {
+  const terms = [...searchTokens(query)];
+  if (!terms.length) return [];
+  const paragraphs = text.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 60);
+  const scored = paragraphs.map((paragraph) => {
+    const words = searchTokens(paragraph);
+    let score = 0;
+    for (const term of terms) if (words.has(term)) score += 1;
+    return { text: paragraph.slice(0, 700), score };
+  });
+  return scored.filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
+};
+
+export const fetchPageTool = {
+  name: 'fetch_page',
+  description:
+    'Fetch a public web page and return its readable text content. Input: { url: string, maxLength?: number (default 8000, max 40000), query?: string — when provided, also returns the passages most relevant to these terms }. Use after web_search to read a result. Private/internal hosts are blocked.',
+  category: 'Web',
+  scope: 'web:read',
+  requiresApproval: false,
+  execute: (input: Record<string, unknown>) =>
+    softFail(async () => {
+      const rawUrl = String(input.url ?? input.link ?? '').trim();
+      if (!rawUrl) throw new Error('url is required');
+      let url = assertPublicHttpUrl(rawUrl);
+      let response: Response | null = null;
+      for (let hop = 0; hop <= 3; hop += 1) {
+        response = await fetch(url.toString(), {
+          headers: { 'user-agent': USER_AGENT, accept: 'text/html,application/xhtml+xml,text/plain,application/json;q=0.9,*/*;q=0.8' },
+          redirect: 'manual',
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (response.status >= 300 && response.status < 400) {
+          const location = response.headers.get('location');
+          if (!location) break;
+          url = assertPublicHttpUrl(new URL(location, url).toString());
+          continue;
+        }
+        break;
+      }
+      if (!response) throw new Error('Fetch produced no response');
+      if (!response.ok) throw new Error(`HTTP ${response.status} fetching ${url.hostname}`);
+      const finalUrl = assertPublicHttpUrl(response.url || url.toString());
+      const contentType = response.headers.get('content-type') ?? '';
+      if (BLOCKED_TEXT_TYPES.test(contentType)) throw new Error(`Unsupported content-type "${contentType.split(';')[0]}"`);
+      const maxLength = Math.min(Math.max(Number(input.maxLength ?? 8000) || 8000, 500), 40_000);
+      const query = String(input.query ?? '').trim();
+
+      if (/application\/json/.test(contentType)) {
+        const body = (await response.text()).slice(0, maxLength);
+        return { url: finalUrl.toString(), contentType, title: '', text: body, truncated: body.length >= maxLength, passages: [] };
+      }
+
+      const html = await response.text();
+      const { title, description, text } = htmlToText(html);
+      const truncated = text.length > maxLength;
+      const clipped = truncated ? text.slice(0, maxLength) : text;
+      return {
+        url: finalUrl.toString(),
+        contentType,
+        title,
+        description: description.slice(0, 400),
+        text: clipped,
+        truncated,
+        wordCount: clipped.split(/\s+/).filter(Boolean).length,
+        passages: query ? relevantPassages(clipped, query) : [],
+      };
     }),
 };
 
 
-async function githubApi(path: string) {
+async function githubApi(path: string, init: { method?: string; body?: unknown } = {}) {
   const token = process.env.GITHUB_TOKEN?.trim();
-  return httpJson(
-    `https://api.github.com${path}`,
-    {
-      headers: {
-        'user-agent': USER_AGENT,
-        accept: 'application/vnd.github+json',
-        'x-github-api-version': '2022-11-28',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
+  const method = (init.method ?? 'GET').toUpperCase();
+  const response = await fetch(`https://api.github.com${path}`, {
+    method,
+    headers: {
+      'user-agent': USER_AGENT,
+      accept: 'application/vnd.github+json',
+      'x-github-api-version': '2022-11-28',
+      ...(init.body !== undefined ? { 'content-type': 'application/json' } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
-    15_000,
-  );
+    ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),
+    signal: AbortSignal.timeout(15_000),
+  });
+  const text = await response.text();
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+  if (!response.ok) {
+    const message = data && typeof data === 'object' ? String(data.message ?? '') : String(data ?? '').slice(0, 200);
+    const hint = response.status === 401 ? ' — check GITHUB_TOKEN' : response.status === 403 ? ' — rate limited or missing permission' : '';
+    throw new Error(`GitHub ${response.status}: ${message || 'request failed'}${hint}`);
+  }
+  return data;
 }
 
 export const githubTool = {
   name: 'github',
   description:
-    "Read-only GitHub lookups. Input: { action: 'search_repos' | 'get_repo' | 'list_issues' | 'search_issues', query?: string, owner?: string, repo?: string, state?: 'open'|'closed'|'all', limit?: number }. Example: { action: 'search_repos', query: 'cli tooling stars:>5000' }. For writes (creating issues, comments, PRs) configure a GitHub MCP server via MCP_SERVERS.",
+    "Read-only GitHub lookups. Input: { action: 'search_repos' | 'get_repo' | 'list_issues' | 'search_issues', query?: string, owner?: string, repo?: string, state?: 'open'|'closed'|'all', limit?: number }. Example: { action: 'search_repos', query: 'cli tooling stars:>5000' }. For file reads, issues, branches and pull requests use the dedicated github_* tools (github_read_file, github_create_issue, github_update_issue, github_comment_issue, github_create_branch, github_get_pull_request, github_create_pull_request).",
   category: 'Integrations',
   scope: 'github:read',
   requiresApproval: false,

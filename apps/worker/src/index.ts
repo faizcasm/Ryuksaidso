@@ -3,11 +3,32 @@ import Redis from 'ioredis';
 import { PrismaClient } from '@prisma/client';
 import pino from 'pino';
 import { executeAgentRun } from '@ryuksaidso/agent-runtime';
-import { buildTools, loadMcpTools, mcpConfigured, type ToolDef } from '@ryuksaidso/agent-tools';
+import { buildTools, loadMcpTools, mcpConfigured, appendObsLog, type ToolDef } from '@ryuksaidso/agent-tools';
+import { Writable } from 'node:stream';
 
-const logger = pino();
 const redis = new Redis(process.env.REDIS_URL || 'redis://redis:6379', { maxRetriesPerRequest: null });
 const prisma = new PrismaClient();
+
+const obsStream = new Writable({
+  write(chunk, _encoding, callback) {
+    const line = String(chunk);
+    process.stdout.write(line);
+    try {
+      const parsed = JSON.parse(line);
+      const numericLevel = Number(parsed?.level ?? 30);
+      if (numericLevel >= 40) {
+        void appendObsLog(redis as any, {
+          t: Date.now(),
+          level: numericLevel >= 50 ? 'error' : 'warn',
+          message: String(parsed?.msg ?? '').slice(0, 2000),
+          meta: { ...(parsed && typeof parsed === 'object' ? parsed : {}), service: 'worker' },
+        });
+      }
+    } catch {}
+    callback();
+  },
+});
+const logger = pino({ level: process.env.LOG_LEVEL || 'info' }, obsStream);
 
 type ChatMessage = { role: 'system'|'user'|'assistant'; content: string };
 
@@ -147,7 +168,7 @@ async function chatWithFallback(primary: 'OLLAMA'|'OMNIROUTE', model: string | u
   throw new Error(errors[errors.length - 1] || 'All LLM providers failed');
 }
 
-const staticTools = buildTools({ prisma });
+const staticTools = buildTools({ prisma, redis: redis as any });
 const mcpToolsPromise: Promise<Record<string, ToolDef>> = mcpConfigured()
   ? loadMcpTools().then((tools) => {
       logger.info({ tools: Object.keys(tools) }, 'MCP tools loaded');

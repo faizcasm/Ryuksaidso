@@ -11,6 +11,7 @@ export type RuntimeDeps = {
     category?: string;
     scope: string;
     requiresApproval: boolean;
+    adminOnly?: boolean;
     execute: (input: Record<string, unknown>, ctx: { user: RuntimeUser; runId: string; agentId?: string | null }) => Promise<unknown>;
   }>;
   requiresApproval: (organizationId: string, action: string, toolApproval: boolean, runId: string) => Promise<boolean>;
@@ -93,7 +94,10 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
 
     const { instructions, tools: agentTools, systemPrompt } = getEffectiveAgentConfig();
     const persona = typeof systemPrompt === 'string' && systemPrompt.trim() ? systemPrompt : instructions;
-    const configuredTools = Array.isArray(agentTools) ? agentTools.map(String) : Object.keys(deps.tools);
+    const isRunAdmin = ['OWNER', 'ADMIN'].includes(String(user.role ?? ''));
+    const configuredTools = (Array.isArray(agentTools) ? agentTools.map(String) : Object.keys(deps.tools)).filter(
+      (name: string) => deps.tools[name] && (isRunAdmin || !deps.tools[name].adminOnly),
+    );
     const toolCatalog = configuredTools.filter((name: string) => deps.tools[name]).map((name: string) => {
       const tool = deps.tools[name];
       return { name: tool.name, description: tool.description, scope: tool.scope, requiresApproval: tool.requiresApproval };
@@ -130,6 +134,18 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
       if (!tool) continue;
       if (!payload.ticketId && (toolName === 'get_ticket' || toolName === 'add_ticket_message')) continue;
 
+      if (tool.adminOnly && !isRunAdmin) {
+        const denied = '403 Forbidden: this tool is restricted to administrators';
+        await step('Tool Gateway', `Denied ${toolName}`, { tool: toolName, reason: call?.reason }, async () => {
+          throw Object.assign(new Error(denied), { statusCode: 403 });
+        }).catch(() => undefined);
+        toolResults.push({ tool: toolName, status: 'DENIED', result: { error: denied } });
+        try {
+          await deps.prisma.auditLog.create({ data: { organizationId: user.organizationId, userId: user.id, action: 'tool.denied', resource: 'tool', resourceId: toolName, metadata: { runId, statusCode: 403 } } });
+        } catch {}
+        continue;
+      }
+
       const approvedScopes = Array.isArray(payload.metadata?.approvedScopes) ? payload.metadata?.approvedScopes.map(String) : [];
       const approved = approvedScopes.includes(tool.scope) ? false : await deps.requiresApproval(user.organizationId, tool.scope, Boolean(tool.requiresApproval), runId);
       const extraInput = call?.input && typeof call.input === 'object' && !Array.isArray(call.input) ? call.input : {};
@@ -161,6 +177,11 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
         return { output: value };
       });
       toolResults.push({ tool: toolName, status: 'COMPLETED', result });
+      if (tool.adminOnly || tool.requiresApproval) {
+        try {
+          await deps.prisma.auditLog.create({ data: { organizationId: user.organizationId, userId: user.id, action: 'tool.executed', resource: 'tool', resourceId: toolName, metadata: { runId, scope: tool.scope, adminOnly: Boolean(tool.adminOnly) } } });
+        } catch {}
+      }
     }
 
     const synthesis = await step('Synthesizer', 'Generate evidence-backed result', { planner, toolResults }, async () => {

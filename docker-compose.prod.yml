@@ -32,6 +32,14 @@ x-api-environment: &api-environment
   SMTP_USER: ${SMTP_USER:-}
   SMTP_PASSWORD: ${SMTP_PASSWORD:-}
   EMAIL_FROM: ${EMAIL_FROM:-}
+  IMAP_HOST: ${IMAP_HOST:-}
+  IMAP_PORT: ${IMAP_PORT:-993}
+  IMAP_USER: ${IMAP_USER:-}
+  IMAP_PASSWORD: ${IMAP_PASSWORD:-}
+  PROMETHEUS_URL: ${PROMETHEUS_URL:-http://prometheus:9090}
+  LOKI_URL: ${LOKI_URL:-http://loki:3100}
+  GRAFANA_URL: ${GRAFANA_URL:-}
+  FILES_ROOT: /data/files
   SYSTEM_ADMIN_EMAILS: ${SYSTEM_ADMIN_EMAILS:-}
   RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-600}
   RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
@@ -116,6 +124,8 @@ services:
     image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/ryuksaidso-api:${IMAGE_TAG:-latest}
     environment:
       <<: *api-environment
+    volumes:
+      - file_data:/data/files
     deploy:
       replicas: ${API_REPLICAS:-2}
     extra_hosts:
@@ -137,6 +147,8 @@ services:
     environment:
       <<: *api-environment
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+    volumes:
+      - file_data:/data/files
     deploy:
       replicas: ${WORKER_REPLICAS:-1}
     extra_hosts:
@@ -213,3 +225,4 @@ volumes:
   prometheus_data: {}
   certbot-www: {}
   certbot-certs: {}
+  file_data: {}

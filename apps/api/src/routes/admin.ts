@@ -4,6 +4,7 @@ import { redis } from '../lib/redis';
 import { providerConfig, type LLMProviderName } from '../lib/config';
 import { requireAuth, requireAdmin, type AuthenticatedRequest } from '../middleware';
 import { audit, type AuthUser } from '../lib/auth';
+import { getBackends, getObservabilitySummary, getRecentErrors, searchRequestLogs } from '@ryuksaidso/agent-tools';
 
 export const adminRouter = Router();
 adminRouter.use(requireAuth);
@@ -266,6 +267,39 @@ adminRouter.get('/audit', async (req, res) => {
   const u = await admin(req as AuthenticatedRequest);
   const limit = Math.min(Math.max(Number(req.query.limit) || 200,1),500);
   res.json(await prisma.auditLog.findMany({ where: { organizationId: u.organizationId }, orderBy: { createdAt: 'desc' }, take: limit }));
+});
+
+adminRouter.get('/observability/summary', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  await admin(req as AuthenticatedRequest);
+  res.json(await getObservabilitySummary({ prisma, redis }));
+});
+
+adminRouter.get('/observability/errors', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  await admin(req as AuthenticatedRequest);
+  res.json(await getRecentErrors({ prisma, redis }, {
+    sinceMinutes: Number(req.query.sinceMinutes) || undefined,
+    limit: Number(req.query.limit) || undefined,
+  }));
+});
+
+adminRouter.get('/observability/requests', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  await admin(req as AuthenticatedRequest);
+  res.json(await searchRequestLogs({ prisma, redis }, {
+    q: String(req.query.q ?? ''),
+    status: String(req.query.status ?? ''),
+    method: String(req.query.method ?? ''),
+    sinceMinutes: Number(req.query.sinceMinutes) || undefined,
+    limit: Number(req.query.limit) || undefined,
+  }));
+});
+
+adminRouter.get('/observability/backends', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  await admin(req as AuthenticatedRequest);
+  res.json(await getBackends());
 });
 
 adminRouter.patch('/members/:id/role', async (req, res) => {
