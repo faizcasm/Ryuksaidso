@@ -173,6 +173,23 @@ All routes require auth. Mutations marked with roles beyond authentication are e
 
 - `GET /evaluations` — evaluation history, newest first.
 - `POST /evaluations` — **OWNER/ADMIN/AGENT**. Body: `{ agentId?, projectId?, name?, dataset: [{ id?, input, expectedIntent }] }` (max 500 cases). Runs intent classification per case through the workspace provider with OmniRoute→Ollama fallback, persists `{ score, results, provider }`. `201` evaluation; `404` unknown agent/project; `403` viewer.
+- Both endpoints return **`402 PaymentRequired`** when the workspace plan has no analytics access and billing is enforced (the Evaluations tab then shows an upgrade banner).
+
+## Billing — `/api/billing`
+
+`requireAuth` for everything except `GET /plans` and `POST /webhook`. Amounts are integers in **paise**. See [docs/BILLING.md](docs/BILLING.md) for the full flow.
+
+- `GET /billing/plans` — **public**. `{ billingEnabled, provider, configured, environment, currency, plans[] }` for the `/pricing` page (plan definitions only, no org data).
+- `GET /billing/subscription` — `{ billingEnabled, enforced, provider, configured, environment, plan, planCode, subscription, contact, entitlements, usage }` — the entitled plan, current subscription, billing contact and monthly usage counters.
+- `GET /billing/payments` — the workspace's payment history (newest 60), each with amount, status, method, failure reason and invoice number.
+- `POST /billing/checkout` — body `{ planCode, period: MONTHLY|YEARLY, phone? }` (phone required for paid plans, 10-digit Indian mobile). Creates/reuses a local `CREATED` subscription and the Cashfree hosted-checkout session → `{ mode: 'checkout', provider, environment, subscriptionId, subsSessionId, planCode, planName, period, amount, currency, returnUrl }`. Switching to `free` returns `{ mode: 'downgraded', planCode }` and cancels the current subscription immediately. `409` when already subscribed to that plan; `400` invalid phone.
+- `POST /billing/checkout/verify` — body `{ subscriptionId }`. Fetches the subscription + payments from Cashfree, settles the previous subscriptions on the `ACTIVE` transition → `{ verified, subscription, payments[] }`. Webhooks remain the source of truth.
+- `POST /billing/subscription/change` — alias of checkout for plan changes from the billing section.
+- `POST /billing/subscription/cancel` — body `{ mode: 'immediate' | 'at_period_end' }` (default `at_period_end`). `at_period_end` pauses the mandate remotely (entitlement continues until `currentPeriodEnd`); `immediate` cancels. `502` when the gateway answers with neither `PAUSED` nor a terminal status.
+- `POST /billing/webhook` — **public, CSRF-exempt, raw body + HMAC signature**. Cashfree webhook receiver; `200` processed/ignored/duplicate, `401` bad signature, `400` missing raw body/type, `500` retryable failure.
+
+Quota hooks elsewhere answer **`402 PaymentRequired`** when a limit is hit: `POST /control/agents`, `POST /tickets`, `POST /control/runs`, `POST /tickets/:id/run`, `POST /account/workspace/invitations`, `POST /account/api-keys`, and every `rsk_` API-key request when the plan has no API access.
+
 
 ## Admin — `/api/admin`
 
@@ -192,6 +209,23 @@ All routes require auth. Mutations marked with roles beyond authentication are e
 - `GET /admin/audit?limit=` — `limit` 1–500 (default 200) audit entries.
 - `PATCH /admin/members/:id/role` — workspace role change with the same guard rails as `/members/:id/role` (plus self-demotion blocked).
 - `POST /admin/members/:id/revoke-sessions` — revokes all sessions of the member behind the membership. `204`; `404`.
+
+## Billing administration — `/api/admin/billing`
+
+`requireAuth` + **system `ADMIN` resolved from the database on every request** (`403` otherwise); every endpoint writes an audit entry. Full guide: [docs/BILLING.md](docs/BILLING.md).
+
+- `GET /admin/billing/overview` — `{ billingEnabled, provider, configured, environment, currency, planCount, mrr, subscriptionCounts, payments[], webhookCounts, metrics }`. MRR counts yearly subscriptions divided by 12.
+- `GET /admin/billing/plans` — all plans (seeds the defaults on first call).
+- `POST /admin/billing/plans` — body `{ code, name, description?, priceMonthly?, priceYearly?, sortOrder?, features?, ...limits }` (prices in paise). `409` duplicate code.
+- `PATCH /admin/billing/plans/:planId` — partial update; changing `priceMonthly`/`priceYearly` clears the stored Cashfree plan id so the next checkout recreates it at the new price. `{ isDefault: true }` demotes the other defaults. `404` unknown plan.
+- `DELETE /admin/billing/plans/:planId` — refuses the default plan (`409`) and plans with subscriptions (`409`, deactivate instead).
+- `GET /admin/billing/subscriptions?status=` — newest 100 subscriptions with workspace name and plan code.
+- `POST /admin/billing/subscriptions/:subscriptionId/action` — `{ action: 'cancel' | 'sync' }` — remote cancel through the gateway or a status re-sync from Cashfree. `409` when the gateway is not configured.
+- `PATCH /admin/billing/subscriptions/:subscriptionId` — `{ status }` manual override (terminal statuses stamp `canceledAt`/`endedAt`; `ACTIVE` clears them).
+- `GET /admin/billing/payments?status=` — newest 200 payments across workspaces.
+- `GET /admin/billing/webhooks` — newest 100 webhook deliveries (`eventId, eventType, status, error, receivedAt, processedAt`).
+- `GET /admin/billing/settings`, `PUT /admin/billing/settings` — `{ billingEnabled }` **global enforcement toggle**: off (default) = every workspace bypasses plan limits, on = quotas and feature gates are active.
+
 
 ## Documentation endpoints — `/api` (public, no auth)
 

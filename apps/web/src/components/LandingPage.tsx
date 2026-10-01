@@ -547,6 +547,7 @@ export default function LandingPage() {
           <Link href="/docs">Docs</Link>
           <Link href="/architecture">Architecture</Link>
           <Link href="/playground">Playground</Link>
+          <Link href="/pricing">Pricing</Link>
         </nav>
 
         <div className="header-actions">
@@ -579,6 +580,9 @@ export default function LandingPage() {
             </Link>
             <Link href="/playground" onClick={() => setNavOpen(false)}>
               Playground
+            </Link>
+            <Link href="/pricing" onClick={() => setNavOpen(false)}>
+              Pricing
             </Link>
             <Link href="/auth" onClick={() => setNavOpen(false)}>
               Sign in
@@ -985,6 +989,7 @@ export default function LandingPage() {
           <Link href="/docs">Docs</Link>
           <Link href="/architecture">Architecture</Link>
           <Link href="/playground">Playground</Link>
+          <Link href="/pricing">Pricing</Link>
           <Link href="/auth">Sign in</Link>
         </nav>
         <small>

@@ -95,6 +95,24 @@
 - Provider/model visibility
 - Live observability section (status pill, system metrics, service health, traffic, error stream with request IDs, request logs, Grafana link)
 
+## Billing and subscriptions
+
+- Cashfree gateway: UPI, Google Pay, PhonePe, Paytm, cards and net banking
+- Hosted checkout with recurring monthly/yearly mandates
+- Plans: Free, Starter (₹499), Pro (₹1,999), Business (₹4,999) — admin-editable prices and limits
+- Webhook receiver with HMAC signature verification and idempotent event ledger
+- Automatic subscription status sync (created → pending → active → paused/completed/cancelled)
+- Entitlements: agents, members, tickets/month, runs/month, API keys, API access, analytics
+- Grace periods: `PENDING` bank approval and cancel-at-period-end keep access until the paid period ends
+- Plan changes settle the previous subscription automatically (pause at cycle end)
+- Failed-payment and refund recording with reasons
+- Payment history per workspace
+- Public `/pricing` page + Settings → Billing section with usage meters
+- Admin → Billing dashboard: global enforcement toggle, MRR, plans CRUD, subscription override/sync/cancel, payment and webhook inspection
+- Global bypass: billing off (default) = full access everywhere; billing outage fails open
+- Provider-neutral schema and `BillingProvider` interface so Stripe can be added without touching routes
+- `402 PaymentRequired` error envelope with upgrade banners in the app
+
 ## Observability
 
 - Prometheus metrics

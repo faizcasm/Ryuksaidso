@@ -4,12 +4,14 @@ import { getResilientProvider } from '../services/llm';
 import { config } from '../lib/config';
 import { requireAuth, type AuthenticatedRequest } from '../middleware';
 import { evaluationSchema } from '../validation';
+import { assertEntitled, resolveBilling } from '../lib/entitlements';
 
 export const evaluationRouter = Router();
 evaluationRouter.use(requireAuth);
 
 evaluationRouter.get('/evaluations', async (req, res) => {
   const u = (req as AuthenticatedRequest).user!;
+  assertEntitled(await resolveBilling(u.organizationId), 'analytics');
   res.json(await prisma.evaluation.findMany({ where: { organizationId: u.organizationId }, orderBy: { createdAt: 'desc' } }));
 });
 
@@ -17,6 +19,7 @@ evaluationRouter.post('/evaluations', async (req, res, next) => {
   try {
     const u = (req as AuthenticatedRequest).user!;
     if (!['OWNER','ADMIN','AGENT'].includes(u.role)) return res.status(403).json({error:'Forbidden',message:'Insufficient permissions'});
+    assertEntitled(await resolveBilling(u.organizationId), 'analytics');
     const body = evaluationSchema.parse(req.body);
     const agent = body.agentId ? await prisma.agent.findFirst({ where: { id: body.agentId, organizationId: u.organizationId }, include: { project: true } }) : null;
     if (body.agentId && !agent) return res.status(404).json({ error:'NotFound', message:'Evaluation agent not found' });

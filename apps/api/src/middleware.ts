@@ -2,8 +2,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { verifyToken, ACCESS_COOKIE, CSRF_COOKIE, type AuthUser } from './lib/auth';
 import { prisma } from './lib/db';
+import { assertApiAccessAllowed, recordApiRequest } from './lib/entitlements';
 
-export type AuthenticatedRequest = Request & { user?: AuthUser & { userRole?: string }; requestId?: string; isAdmin?: boolean; apiKey?: boolean };
+export type AuthenticatedRequest = Request & { user?: AuthUser & { userRole?: string }; requestId?: string; isAdmin?: boolean; apiKey?: boolean; rawBody?: Buffer };
 
 function cookie(req: Request, name: string) {
   const header = req.headers.cookie ?? '';
@@ -50,6 +51,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     if (!key) return res.status(401).json({ error: 'Unauthorized', message: 'Invalid API key' });
     (req as AuthenticatedRequest).user = key.user;
     (req as AuthenticatedRequest).apiKey = true;
+    await assertApiAccessAllowed(key.user.organizationId);
+    void recordApiRequest(key.user.organizationId);
     return next();
   }
 
@@ -59,7 +62,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   next();
 }
 
-const CSRF_EXEMPT = new Set(['/auth/login','/auth/register','/auth/refresh','/auth/forgot-password','/auth/reset-password','/auth/verify-email']);
+const CSRF_EXEMPT = new Set(['/auth/login','/auth/register','/auth/refresh','/auth/forgot-password','/auth/reset-password','/auth/verify-email','/billing/webhook']);
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
   const bearer = req.header('authorization')?.replace(/^Bearer\s+/i, '');
   if (['GET','HEAD','OPTIONS'].includes(req.method) || CSRF_EXEMPT.has(req.path) || req.path.startsWith('/auth/oauth/') || bearer?.startsWith('rsk_')) return next();

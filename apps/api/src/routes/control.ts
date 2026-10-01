@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { requireAuth, type AuthenticatedRequest } from '../middleware';
 import { prisma } from '../lib/db';
 import { agentRuns } from '../lib/metrics';
+import { assertQuota, monthStart } from '../lib/entitlements';
 import { audit, type AuthUser } from '../lib/auth';
 import { enqueueRun } from '../services/queue';
 import {
@@ -386,6 +387,9 @@ controlRouter.post('/agents', async (req, res, next) => {
 
     const body =
       createAgentSchema.parse(req.body);
+
+    const currentAgents = await prisma.agent.count({ where: { organizationId: u.organizationId } });
+    await assertQuota(u.organizationId, 'agents', currentAgents);
 
     const projectId =
       body.projectId ??
@@ -775,6 +779,11 @@ controlRouter.post(
 
       const body =
         createRunSchema.parse(req.body);
+
+      const currentRuns = await prisma.agentRun.count({
+        where: { organizationId: u.organizationId, createdAt: { gte: monthStart() } },
+      });
+      await assertQuota(u.organizationId, 'runs', currentRuns);
 
       const agent =
         await prisma.agent.findFirst({

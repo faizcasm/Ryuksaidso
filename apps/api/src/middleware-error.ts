@@ -29,6 +29,15 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
   const safeStatus = status >= 400 && status < 600 ? status : 500;
   const requestId = req.header('x-request-id');
 
+  if (safeStatus === 402) {
+    res.status(402).json({
+      error: 'PaymentRequired',
+      message: err instanceof Error && err.message ? err.message : 'Upgrade your plan to continue',
+      requestId
+    });
+    return;
+  }
+
   logger.error('Unhandled request error', {
     requestId,
     method: req.method,

@@ -58,6 +58,7 @@ import { usePathname, useRouter } from "next/navigation";
 import icon from "../app/icon.png";
 import { api, API } from "../lib/api";
 import { isAdmin as isAdminRole } from "../lib/roles";
+import { BillingAdminSection, BillingSection, EvalLockBanner } from "./Billing";
 
 type User = {
   id: string;
@@ -448,6 +449,7 @@ export default function AppShell() {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [evalLocked, setEvalLocked] = useState(false);
   const [toolCatalog, setToolCatalog] = useState<ToolMeta[]>([]);
   const [evalRunning, setEvalRunning] = useState(false);
   const [selectedRun, setSelectedRun] = useState<Run | null>(null);
@@ -595,7 +597,15 @@ export default function AppShell() {
           api<Ticket[]>("/tickets").catch(() => []),
           api<any>("/organization").catch(() => null),
           api<AdminOverview["members"]>("/members").catch(() => []),
-          api<Evaluation[]>("/evaluations").catch(() => []),
+          api<Evaluation[]>("/evaluations")
+            .then((rows) => {
+              setEvalLocked(false);
+              return rows;
+            })
+            .catch((e) => {
+              if ((e as { status?: number })?.status === 402) setEvalLocked(true);
+              return [];
+            }),
         ]);
       setDashboard(dash);
       setProjects(proj);
@@ -1023,6 +1033,7 @@ export default function AppShell() {
       await loadCore();
       notify("Evaluation completed.", "success");
     } catch (e) {
+      if ((e as { status?: number })?.status === 402) setEvalLocked(true);
       setError(
         readError(
           e,
@@ -1275,6 +1286,14 @@ export default function AppShell() {
     if (user && pathname === "/auth") router.replace("/dashboard");
   }, [user, pathname, router]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("billing") === "checkout") {
+      setTab("Settings");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
   const isSystemAdmin = isAdminRole(user?.userRole);
   const canManageWorkspace = user?.role === "OWNER" || user?.role === "ADMIN";
   useEffect(() => {
@@ -1508,6 +1527,8 @@ export default function AppShell() {
               evaluations={evaluations}
               running={evalRunning}
               onSubmit={runEvaluation}
+              locked={evalLocked}
+              onUpgrade={() => setTab("Settings")}
             />
           )}
           {tab === "Approvals" && (
@@ -3103,6 +3124,8 @@ function EvaluationsView({
   evaluations,
   running,
   onSubmit,
+  locked,
+  onUpgrade,
 }: {
   name: string;
   setName: (x: string) => void;
@@ -3114,6 +3137,8 @@ function EvaluationsView({
   evaluations: Evaluation[];
   running: boolean;
   onSubmit: (e: FormEvent) => void;
+  locked: boolean;
+  onUpgrade: () => void;
 }) {
   return (
     <div className="page">
@@ -3127,6 +3152,7 @@ function EvaluationsView({
           </p>
         </div>
       </div>
+      {locked && <EvalLockBanner onUpgrade={onUpgrade} />}
       <div className="layout-2">
         <section className="panel">
           <PanelHeader
@@ -4326,6 +4352,7 @@ function SettingsView({
             />
           )}
         </section>
+        <BillingSection canManage={canManageMembers} />
         <section className="panel wide">
           <PanelHeader
             icon={Users}
@@ -4592,6 +4619,7 @@ function AdminView({
         </div>
       </div>
       <ObservabilitySection viewerSystemRole={viewerSystemRole} />
+      {viewerSystemRole === "ADMIN" && <BillingAdminSection />}
       {viewerSystemRole === "ADMIN" && users && <SystemUsersSection users={users} />}
       <div className="admin-grid">
         <section className="panel">

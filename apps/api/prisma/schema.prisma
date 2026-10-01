@@ -397,6 +397,145 @@ model WorkspaceInvitation {
   @@index([email,acceptedAt])
 }
 
+enum BillingPeriod {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  CREATED
+  ACTIVE
+  PENDING
+  HALTED
+  CANCELLED
+  PAUSED
+  COMPLETED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  CREATED
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+}
+
+model BillingPlan {
+  id String @id @default(cuid())
+  code String @unique
+  name String
+  description String @default("")
+  priceMonthly Int @default(0)
+  priceYearly Int @default(0)
+  currency String @default("INR")
+  providerPlanMonthly String @default("")
+  providerPlanYearly String @default("")
+  maxAgents Int @default(0)
+  maxMembers Int @default(0)
+  maxTicketsPerMonth Int @default(0)
+  maxRunsPerMonth Int @default(0)
+  maxApiKeys Int @default(0)
+  apiAccess Boolean @default(true)
+  analyticsAccess Boolean @default(true)
+  features String[] @default([])
+  isDefault Boolean @default(false)
+  sortOrder Int @default(0)
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BillingCustomer {
+  id String @id @default(cuid())
+  organizationId String
+  providerCustomerId String @unique
+  name String @default("")
+  email String @default("")
+  contact String @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([organizationId])
+}
+
+model BillingSubscription {
+  id String @id @default(cuid())
+  organizationId String
+  planId String
+  providerSubscriptionId String @unique
+  status SubscriptionStatus @default(CREATED)
+  period BillingPeriod @default(MONTHLY)
+  amount Int @default(0)
+  currency String @default("INR")
+  totalCount Int @default(0)
+  currentPeriodStart DateTime?
+  currentPeriodEnd DateTime?
+  cancelAtPeriodEnd Boolean @default(false)
+  canceledAt DateTime?
+  endedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([organizationId, status])
+  @@index([status, createdAt])
+}
+
+model BillingPayment {
+  id String @id @default(cuid())
+  organizationId String @default("")
+  providerPaymentId String @unique
+  providerOrderId String @default("")
+  providerSubscriptionId String @default("")
+  planId String @default("")
+  amount Int @default(0)
+  currency String @default("INR")
+  status PaymentStatus @default(CREATED)
+  method String @default("")
+  failureReason String @default("")
+  invoiceNumber String @default("")
+  capturedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([organizationId, createdAt])
+  @@index([status, createdAt])
+}
+
+model BillingWebhookEvent {
+  id String @id @default(cuid())
+  eventId String @unique
+  eventType String
+  status WebhookEventStatus @default(RECEIVED)
+  error String @default("")
+  payload Json?
+  receivedAt DateTime @default(now())
+  processedAt DateTime?
+  @@index([status, receivedAt])
+  @@index([eventType, receivedAt])
+}
+
+model BillingUsage {
+  id String @id @default(cuid())
+  organizationId String
+  periodKey String
+  apiRequests Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([organizationId, periodKey])
+}
+
+model BillingSetting {
+  id String @id @default("global")
+  billingEnabled Boolean @default(false)
+  updatedBy String @default("")
+  updatedAt DateTime @updatedAt
+}
+
 model EmailVerificationToken {
   id String @id @default(cuid())
   userId String

@@ -60,3 +60,76 @@ export const inviteMemberSchema = z.object({
   role: z.enum(['ADMIN','AGENT','VIEWER']).default('VIEWER')
 });
 export const acceptInvitationSchema = z.object({ token: z.string().min(20).max(300) });
+
+export const checkoutSchema = z.object({
+  planCode: z.string().trim().min(1).max(40),
+  period: z.enum(['MONTHLY','YEARLY']).default('MONTHLY'),
+  phone: z.string().trim().max(20).optional()
+}).refine(v => {
+  if (!v.phone) return true;
+  const digits = v.phone.replace(/[^0-9]/g, '');
+  const local = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
+  return /^[6-9]\d{9}$/.test(local);
+}, {
+  message: 'Enter a valid 10-digit Indian mobile number',
+  path: ['phone']
+});
+
+export const cancelSubscriptionSchema = z.object({
+  mode: z.enum(['immediate','at_period_end']).default('at_period_end')
+});
+
+export const verifyCheckoutSchema = z.object({
+  subscriptionId: z.string().trim().min(3).max(250)
+});
+
+const billingLimitsShape = {
+  maxAgents: z.number().int().min(0).max(1_000_000).optional(),
+  maxMembers: z.number().int().min(0).max(1_000_000).optional(),
+  maxTicketsPerMonth: z.number().int().min(0).max(1_000_000).optional(),
+  maxRunsPerMonth: z.number().int().min(0).max(1_000_000).optional(),
+  maxApiKeys: z.number().int().min(0).max(10_000).optional(),
+  apiAccess: z.boolean().optional(),
+  analyticsAccess: z.boolean().optional()
+};
+
+export const adminPlanUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(60).optional(),
+  description: z.string().trim().max(400).optional(),
+  priceMonthly: z.number().int().min(0).max(100_000_000).optional(),
+  priceYearly: z.number().int().min(0).max(1_000_000_000).optional(),
+  active: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(1000).optional(),
+  features: z.array(z.string().trim().min(1).max(160)).max(30).optional(),
+  ...billingLimitsShape
+}).refine(v=>Object.keys(v).length>0);
+
+export const adminPlanCreateSchema = z.object({
+  code: z.string().trim().min(2).max(40).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Code must be lowercase alphanumeric with dashes'),
+  name: z.string().trim().min(1).max(60),
+  description: z.string().trim().max(400).default(''),
+  priceMonthly: z.number().int().min(0).max(100_000_000).default(0),
+  priceYearly: z.number().int().min(0).max(1_000_000_000).default(0),
+  sortOrder: z.number().int().min(0).max(1000).default(10),
+  features: z.array(z.string().trim().min(1).max(160)).max(30).default([]),
+  maxAgents: z.number().int().min(0).max(1_000_000).default(0),
+  maxMembers: z.number().int().min(0).max(1_000_000).default(0),
+  maxTicketsPerMonth: z.number().int().min(0).max(1_000_000).default(0),
+  maxRunsPerMonth: z.number().int().min(0).max(1_000_000).default(0),
+  maxApiKeys: z.number().int().min(0).max(10_000).default(0),
+  apiAccess: z.boolean().default(true),
+  analyticsAccess: z.boolean().default(true)
+});
+
+export const adminSubscriptionActionSchema = z.object({
+  action: z.enum(['cancel','sync'])
+});
+
+export const adminSubscriptionStatusSchema = z.object({
+  status: z.enum(['ACTIVE','PENDING','HALTED','CANCELLED','PAUSED','COMPLETED','EXPIRED'])
+});
+
+export const billingSettingsSchema = z.object({
+  billingEnabled: z.boolean()
+});

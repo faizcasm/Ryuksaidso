@@ -11,7 +11,7 @@ vi.mock('../lib/db', () => ({
     ticket: { findFirst: vi.fn() },
     agent: { findFirst: vi.fn() },
     organization: { findUnique: vi.fn() },
-    agentRun: { create: vi.fn() },
+    agentRun: { create: vi.fn(), count: vi.fn(async () => 0) },
     auditLog: { create: vi.fn() },
     user: { findUnique: vi.fn() }
   }

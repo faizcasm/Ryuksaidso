@@ -8,6 +8,7 @@ import { getLLMProvider, isModelAvailable } from '../services/llm';
 import { sendVerificationEmail, sendWorkspaceInvitationEmail } from '../services/email';
 import { logger } from '../lib/logger';
 import { acceptInvitationSchema, inviteMemberSchema } from '../validation';
+import { assertEntitled, assertQuota, resolveBilling } from '../lib/entitlements';
 import { REFRESH_COOKIE, switchSessionOrganization, setSessionCookies } from '../lib/auth';
 
 export const accountRouter = Router();
@@ -241,6 +242,11 @@ accountRouter.post('/workspace/invitations', async (req, res, next) => {
   try {
     const u = user(req as AuthenticatedRequest); requireRole(u, ['OWNER','ADMIN']);
     const body = inviteMemberSchema.parse(req.body);
+    const currentMembers = await prisma.membership.count({ where: { organizationId: u.organizationId } });
+    const pendingInvitations = await prisma.workspaceInvitation.count({
+      where: { organizationId: u.organizationId, acceptedAt: null, expiresAt: { gt: new Date() } },
+    });
+    await assertQuota(u.organizationId, 'members', currentMembers + pendingInvitations);
     const email = body.email.trim().toLowerCase();
     const existing = await prisma.membership.findFirst({ where: { organizationId:u.organizationId, user:{ email } } });
     if (existing) return res.status(409).json({ error:'Conflict', message:'That user is already a member of this workspace' });
@@ -314,6 +320,10 @@ accountRouter.get('/api-keys', async (req, res) => {
 accountRouter.post('/api-keys', async (req, res, next) => {
   try {
     const u = user(req as AuthenticatedRequest); requireRole(u, ['OWNER', 'ADMIN']);
+    const resolved = await resolveBilling(u.organizationId);
+    assertEntitled(resolved, 'api');
+    const currentKeys = await prisma.apiKey.count({ where: { organizationId: u.organizationId } });
+    await assertQuota(u.organizationId, 'apiKeys', currentKeys);
     const name = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
     if (name.length < 2 || name.length > 80) return res.status(400).json({ error: 'ValidationError', message: 'API key name must be between 2 and 80 characters' });
     const secret = `rsk_${crypto.randomBytes(32).toString('base64url')}`;

@@ -6,6 +6,7 @@ import { enqueueRun } from '../services/queue';
 import { requireAuth, type AuthenticatedRequest } from '../middleware';
 import { createDocumentSchema, createTicketSchema, updateAgentSchema } from '../validation';
 import { tools } from '../services/tools';
+import { assertQuota, monthStart } from '../lib/entitlements';
 import { loadMcpTools, mcpConfigured } from '@ryuksaidso/agent-tools';
 
 export const appRouter = Router();
@@ -30,6 +31,8 @@ appRouter.post('/tickets', async (req, res) => {
   const u = user(req as AuthenticatedRequest);
   requireRole(u, ['OWNER','ADMIN','AGENT']);
   const body = createTicketSchema.parse(req.body);
+  const currentTickets = await prisma.ticket.count({ where: { organizationId: u.organizationId, createdAt: { gte: monthStart() } } });
+  await assertQuota(u.organizationId, 'tickets', currentTickets);
   const ticket = await prisma.ticket.create({
     data: {
       organizationId: u.organizationId,
@@ -62,6 +65,8 @@ appRouter.post('/tickets/:id/run', async (req, res) => {
   if (!model) {
     return res.status(409).json({ error: 'ProviderNotConfigured', message: `${provider} has no model configured for this workspace. Configure it in Settings before running an agent.` });
   }
+  const currentRuns = await prisma.agentRun.count({ where: { organizationId: u.organizationId, createdAt: { gte: monthStart() } } });
+  await assertQuota(u.organizationId, 'runs', currentRuns);
   const run = await prisma.agentRun.create({ data: { organizationId: u.organizationId, projectId: agent.projectId, ticketId: ticket.id, agentId: agent.id, agentVersionId: agent.versions[0]?.id, provider, status: 'QUEUED', trigger: 'ticket', environment: 'production', input: { prompt: `${ticket.title}
 
 ${ticket.description}`, ticketId: ticket.id } } });

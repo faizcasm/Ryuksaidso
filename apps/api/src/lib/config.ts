@@ -28,6 +28,13 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(), GOOGLE_CLIENT_SECRET: z.string().optional(), GOOGLE_REDIRECT_URI: optionalUrl,
   GITHUB_CLIENT_ID: z.string().optional(), GITHUB_CLIENT_SECRET: z.string().optional(), GITHUB_REDIRECT_URI: optionalUrl,
   SMTP_HOST: z.string().optional(), SMTP_PORT: z.coerce.number().int().positive().default(587), SMTP_SECURE: z.string().default('false').transform(v => v === 'true'), SMTP_USER: z.string().optional(), SMTP_PASSWORD: z.string().optional(), EMAIL_FROM: z.string().optional(),
+  BILLING_PROVIDER: z.string().default('cashfree'),
+  CASHFREE_CLIENT_ID: z.string().default(''),
+  CASHFREE_CLIENT_SECRET: z.string().default(''),
+  CASHFREE_WEBHOOK_SECRET: z.string().default(''),
+  CASHFREE_ENVIRONMENT: z.enum(['sandbox', 'production']).default('sandbox'),
+  BILLING_CURRENCY: z.string().trim().min(3).max(3).default('INR'),
+  BILLING_RETURN_URL: optionalUrl,
   DOCKER_RUNTIME: z.string().default('false').transform(v => v === 'true')
 }).superRefine((v, ctx) => {
   if (v.NODE_ENV === 'production') {
