@@ -98,8 +98,8 @@ appRouter.get('/agents', async (req,res)=>{ const u=user(req as AuthenticatedReq
 appRouter.patch('/agents/:id', async (req,res,next)=>{ try { const u=user(req as AuthenticatedRequest); requireRole(u,['OWNER','ADMIN']); const body=updateAgentSchema.parse(req.body); if(body.projectId){ const project=await prisma.project.findFirst({where:{id:body.projectId,organizationId:u.organizationId}}); if(!project) return res.status(404).json({error:'NotFound',message:'Project not found'}); } const agent=await prisma.agent.findFirst({where:{id:req.params.id,organizationId:u.organizationId}}); if(!agent) return res.status(404).json({error:'NotFound',message:'Agent not found'}); const updated=await prisma.agent.update({where:{id:agent.id},data:body}); await audit(u,'agent.updated','agent',agent.id,body); res.json(updated); } catch(e){ next(e); } });
 appRouter.get('/tools', async (req,res)=>{
   const u = user(req as AuthenticatedRequest);
-  const memberAdmin = ['OWNER','ADMIN'].includes(String(u.role ?? ''));
+  const adminCaller = String(u.userRole ?? '') === 'ADMIN';
   const mcp = mcpConfigured() ? await loadMcpTools().catch(() => ({}) as Record<string, never>) : {};
   const all = { ...tools, ...mcp };
-  res.json(Object.values(all).filter(tool => memberAdmin || !tool.adminOnly).map(({execute,...meta})=>meta));
+  res.json(Object.values(all).filter(tool => adminCaller || !tool.adminOnly).map(({execute,...meta})=>meta));
 });

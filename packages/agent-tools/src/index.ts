@@ -26,7 +26,7 @@ import { buildObservabilityTools } from './observability-tools';
 import { softFail } from './util';
 
 export type { ToolDef, ToolContext, BuildToolsDeps, ObsRedis } from './types';
-export { ADMIN_ROLES, isAdminRole, toolAllowedForRole } from './types';
+export { ADMIN_ROLES, isAdminRole, isSystemAdmin, toolAllowedForRole } from './types';
 export { calculate } from './calc';
 export { loadMcpTools, mcpConfigured, resetMcpCache } from './mcp';
 export { currentTimeTool, currentWeatherTool, webSearchTool, githubTool, fetchPageTool } from './external';

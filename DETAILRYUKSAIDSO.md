@@ -154,7 +154,7 @@ The control plane is a single responsive app (`apps/web`) with **14 main section
 |---|---|
 | **Command Center** | Live operational overview: KPI cards, **24-hour throughput area chart**, status-mix bar, **provider-split donut**, **top agents leaderboard**, **awaiting-approval panel with inline Approve/Reject**, latest runs |
 | **Run Lab** | Launch a run against any agent with prompt/environment/trigger; live wait states (`QUEUED → RUNNING → WAITING_APPROVAL → COMPLETED/FAILED`) |
-| **Agents** | Agent registry: create/edit with instructions, **custom system prompt**, **category-grouped tool picker** (46 tools with approval markers), knowledge scope, enable/disable, version publishing, "custom prompt" badge |
+| **Agents** | Agent registry: create/edit with instructions, **custom system prompt**, **category-grouped tool picker** (34 tools for members, 46 for system admins, with approval markers), knowledge scope, enable/disable, version publishing, "custom prompt" badge |
 | **Projects** | Isolate agent ownership and execution history per project |
 | **Tickets** | Support workflow: create/inspect tickets, run the agent on them, **conversation thread** (human + assistant messages), approval-gated replies |
 | **Traces** | Trace explorer: list runs, inspect ordered planner/tool/synthesizer steps with JSON payloads, latency, tokens, errors; retry action |
@@ -166,7 +166,7 @@ The control plane is a single responsive app (`apps/web`) with **14 main section
 | **Docs** | In-app documentation: tool gateway & MCP, tool table (all 13 with scopes), auth API, LangChain/LangGraph/MCP explainers |
 | **Architecture** | Visualized architecture of the running system |
 | **Settings** | Profile (name/title/bio/avatar/timezone), password change, **email verification**, sessions & revoke-all, workspace switch, invitations, **LLM provider routing**, **theme (system/light/dark)** |
-| **Admin** *(system admins only)* | 14-day analytics: metric cards (incl. failure rate), token-usage chart, provider split, member growth, top tools with avg latency, **live system health (PostgreSQL/Redis/LLM probes)**, run volume, reliability donut, member management, audit stream |
+| **Admin** *(system admins only)* | 14-day analytics: metric cards (incl. failure rate), token-usage chart, provider split, member growth, top tools with avg latency, **live system health (PostgreSQL/Redis/LLM probes)**, run volume, reliability donut, **System users table (per-user projects/agents/runs/tokens + growth chart + top users)**, member management, audit stream |
 
 Global UX elements: sticky topbar with **theme toggle** and a **Refresh button that re-syncs everything (including admin data)**, auto-dismissing modern **toast notifications** (6 s, hover-to-pause, error/success variants), mobile-responsive sidebar.
 
@@ -305,7 +305,7 @@ ryuksaidsoproductionready/
 │   │   │   ├── services/     # email, llm (providers+fallback), queue, tools
 │   │   │   ├── agents/       # runtime.ts, evaluate.ts
 │   │   │   ├── lib/          # auth, config, db, logger, metrics, redis
-│   │   │   └── __tests__/    # 12 vitest suites (166 tests)
+│   │   │   └── __tests__/    # 13 vitest suites (178 tests)
 │   │   └── prisma/           # schema.prisma (466 lines) + 11 migrations
 │   ├── web/                  # Next.js 15 control plane
 │   │   └── src/
@@ -378,7 +378,7 @@ ryuksaidsoproductionready/
 
 ## 10. The API
 
-**Base URL:** `http://localhost:4001/api` — **72 endpoints** across 8 routers.
+**Base URL:** `http://localhost:4001/api` — **73 endpoints** across 8 routers.
 
 ### Auth modes
 1. **Browser sessions** — HTTP-only cookies: short-lived access token + rotating refresh token (both hashed at rest), `x-csrf-token` required for mutations.
@@ -392,10 +392,10 @@ Every protected route is **tenant-scoped from the authenticated organization**.
 | `/auth` | 10 | `register`, `login`, `refresh`, `logout`, `forgot-password`, `reset-password`, `verify-email`, `oauth/:provider(+callback)`, `providers` |
 | `/account` | 25 | profile (+verify-email, password), LLM providers/settings, organization, members & role changes, workspace switch, invitations, sessions & revoke-all, API keys, audit, security |
 | `/control` | 6 | `dashboard` (24 h metrics), `projects` CRUD, `agents` CRUD, `runs` create/list |
-| `/app` | 10 | `me`, tickets CRUD + `tickets/:id/run`, runs, documents, agents, **`tools` (the 13-tool registry)** |
+| `/app` | 10 | `me`, tickets CRUD + `tickets/:id/run`, runs, documents, agents, **`tools` (the 46-tool registry)** |
 | `/approvals` | 2 | list, `:id/decision` (approve → continuation run) |
 | `/evaluations` | 2 | list, create (runs dataset, records provider + per-case results) |
-| `/admin` | 8 | system users, role grant, `me/role`, **`overview` (analytics payload)**, runs, audit, member role/revoke |
+| `/admin` | 9 | system users, role grant, **`users/overview` (per-user projects/agents/runs/tokens)**, `me/role`, **`overview` (analytics payload)**, runs, audit, observability ×4, member role/revoke |
 | `/docs` | 9 | in-app docs, architecture (+`/visualize`), agents/langchain/langgraph/mcp explainers, auth API |
 
 **Runtime endpoints:** `GET /health` (liveness) · `GET /ready` (dependency readiness) · `GET /metrics` (Prometheus)
@@ -403,6 +403,9 @@ Every protected route is **tenant-scoped from the authenticated organization**.
 ### The Admin overview payload (`GET /admin/overview`)
 Fresh data every call (`Cache-Control: no-store`, `Pragma: no-cache`), 14-day window:
 `metrics` (members, projects, agents, runs, tokens, avg latency, failure rate, pending approvals, sessions, API keys, tickets, verified members) · `series` (daily runs/tokens) · `providerSplit` · `statusSplit` · `registrations` (daily signups + pre-window baseline) · `topTools` (AgentStep aggregation with avg duration) · `health` (time-boxed PostgreSQL `SELECT 1`, Redis `ping`, LLM `/models` probes with latency) · `generatedAt`.
+
+### The System users payload (`GET /admin/users/overview`, system ADMIN only)
+`totals` (users/admins/verified/workspaces/active sessions/projects/agents/runs/tokens) · `registrations` (daily series + pre-window baseline) · `roleSplit` · `topUsers` (token/run leaderboard) · `users[]` (newest 500: status `active|idle|new`, per-org projects/agents/runs/tokens, active sessions, verified) · `truncated` · `generatedAt`.
 
 ---
 
@@ -492,20 +495,20 @@ One shared registry (`packages/agent-tools`) — **the API serves metadata, the 
 | 32 | `calendar_create_event` | Calendar | `calendar:write` | **Always** | Start/end/title/location |
 | 33 | `calendar_update_event` | Calendar | `calendar:write` | **Always** | Partial updates |
 | 34 | `calendar_delete_event` | Calendar | `calendar:write` | **Always** | Removal |
-| 35 | `database_schema` | Database | `database:read` | Never | **Admin-only** (OWNER/ADMIN), 403 otherwise |
-| 36 | `database_query` | Database | `database:read` | Never | **Admin-only**; single statement, `SELECT`/`WITH` only, dangerous functions blocked, secret columns redacted |
-| 37 | `database_explain` | Database | `database:read` | Never | **Admin-only**; `EXPLAIN` on read-only SQL |
-| 38 | `database_insert` | Database | `database:write` | **Always** | **Admin-only**; identifier-validated columns, forced `organizationId` |
-| 39 | `database_update` | Database | `database:write` | **Always** | **Admin-only**; non-empty `where` required, forced `organizationId` |
-| 40 | `get_observability_summary` | Observability | `observability:read` | Never | **Admin-only**; services + system metrics + request stats + presentation payload |
-| 41 | `get_service_health` | Observability | `observability:read` | Never | **Admin-only**; live probes (Postgres/Redis/API/Web/LLM) |
-| 42 | `get_system_metrics` | Observability | `observability:read` | Never | **Admin-only**; CPU/memory/disk/load from `/proc` + `statfs` |
-| 43 | `get_recent_errors` | Observability | `observability:read` | Never | **Admin-only**; ring buffer + Loki, redacted, root-cause hint |
-| 44 | `search_request_logs` | Observability | `observability:read` | Never | **Admin-only**; status/method/path/text filters with request IDs |
-| 45 | `prometheus_query` | Observability | `observability:read` | Never | **Admin-only**; PromQL instant/range, auto-detects the backend |
-| 46 | `loki_query` | Observability | `observability:read` | Never | **Admin-only**; LogQL, auto-detects the backend |
+| 35 | `database_schema` | Database | `database:read` | Never | **System-admin only**, 403 otherwise |
+| 36 | `database_query` | Database | `database:read` | Never | **System-admin only**; single statement, `SELECT`/`WITH` only, dangerous functions blocked, secret columns redacted |
+| 37 | `database_explain` | Database | `database:read` | Never | **System-admin only**; `EXPLAIN` on read-only SQL |
+| 38 | `database_insert` | Database | `database:write` | **Always** | **System-admin only**; identifier-validated columns, forced `organizationId` |
+| 39 | `database_update` | Database | `database:write` | **Always** | **System-admin only**; non-empty `where` required, forced `organizationId` |
+| 40 | `get_observability_summary` | Observability | `observability:read` | Never | **System-admin only**; services + system metrics + request stats + presentation payload |
+| 41 | `get_service_health` | Observability | `observability:read` | Never | **System-admin only**; live probes (Postgres/Redis/API/Web/LLM) |
+| 42 | `get_system_metrics` | Observability | `observability:read` | Never | **System-admin only**; CPU/memory/disk/load from `/proc` + `statfs` |
+| 43 | `get_recent_errors` | Observability | `observability:read` | Never | **System-admin only**; ring buffer + Loki, redacted, root-cause hint |
+| 44 | `search_request_logs` | Observability | `observability:read` | Never | **System-admin only**; status/method/path/text filters with request IDs |
+| 45 | `prometheus_query` | Observability | `observability:read` | Never | **System-admin only**; PromQL instant/range, auto-detects the backend |
+| 46 | `loki_query` | Observability | `observability:read` | Never | **System-admin only**; LogQL, auto-detects the backend |
 
-**Categories for the grouped picker:** Knowledge · Tickets · Utilities · Web · Integrations · Files · Email · Calendar · Database · Observability.
+**Categories for the grouped picker:** Knowledge · Tickets · Utilities · Web · Integrations · Files · Email · Calendar · Database · Observability — the last two render only for system admins (8 categories / 34 tools otherwise).
 
 ### MCP (Model Context Protocol)
 - Configure any MCP server via `MCP_SERVERS` (stdio command or HTTP URL).
@@ -604,6 +607,7 @@ Available only to **system admins** (`userRole=ADMIN`), separate from workspace 
 - **Top tools** — rank bars with run count and **average latency**.
 - **System health** — PostgreSQL / Redis / LLM cards with live latency, status dots, and model info.
 - **Run volume bars**, **reliability donut**, **status-mix stacked bar**, model routing, recent executions, member management (role change / revoke sessions), audit stream.
+- **System users** — cross-workspace account table (`GET /admin/users/overview`): totals (accounts, admins, verified, workspaces, active sessions, runs, agents, tokens), search + status filter, expandable per-user rows with per-workspace projects/agents/runs/tokens, daily **User growth** area chart and a **Top users** token/run leaderboard.
 
 ---
 
@@ -691,7 +695,7 @@ pnpm test       # vitest (API suites)
 
 | Layer | Tool | Current state |
 |---|---|---|
-| **Unit/integration** | Vitest (`apps/api`) | **166 tests / 12 suites passing** — calculator safety, knowledge terms, 46-tool registry & metadata, `unit_convert`, `text_tools`, **weather two-source fallback (stubbed fetch)**, tool governance (admin-only 403s, SQL/file-system guards, secret redaction, approval flags, search filters), auth, server routes, LLM fallback (OmniRoute→Ollama), evaluator |
+| **Unit/integration** | Vitest (`apps/api`) | **178 tests / 13 suites passing** — calculator safety, knowledge terms, 46-tool registry & metadata, `unit_convert`, `text_tools`, **weather two-source fallback (stubbed fetch)**, tool governance (system-admin-only 403s, SQL/file-system guards, secret redaction, approval flags, search filters), system users overview builder, auth, server routes, LLM fallback (OmniRoute→Ollama), evaluator |
 | **Static** | `tsc --noEmit` | **5/5 workspaces clean** |
 | **UI regression (browser)** | scripted Playwright harness (test-only, never shipped) | `ux-ui.mjs` → **33/33** (panels, charts, refresh, toast dismiss/close, theming, zero console errors); `tools-ui.mjs` → all pass (46 tools in picker, prompt badge) |
 | **End-to-end** | `tools-e2e.sh` against the live Docker stack | **ALL PASS (50+ checks)**: registry, agent+prompt persistence, 4 completed LLM runs (time/calculator, weather with real conditions, web_search, github, dedicated **new-tools run**), system-prompt persona in answers, ticket → OmniRoute → approval → continuation + reply, evaluation answered by OmniRoute with per-case results |

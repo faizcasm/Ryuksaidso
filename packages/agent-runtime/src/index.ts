@@ -1,4 +1,4 @@
-export type RuntimeUser = { id: string; email: string; name: string; organizationId: string; role: string };
+export type RuntimeUser = { id: string; email: string; name: string; organizationId: string; role: string; userRole?: string };
 export type RuntimeEvent = { runId: string; step: number; agent: string; action: string; status: 'running' | 'completed' | 'failed'; data?: unknown; message?: string };
 
 export type RuntimeDeps = {
@@ -94,7 +94,7 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
 
     const { instructions, tools: agentTools, systemPrompt } = getEffectiveAgentConfig();
     const persona = typeof systemPrompt === 'string' && systemPrompt.trim() ? systemPrompt : instructions;
-    const isRunAdmin = ['OWNER', 'ADMIN'].includes(String(user.role ?? ''));
+    const isRunAdmin = String(user.userRole ?? '') === 'ADMIN';
     const configuredTools = (Array.isArray(agentTools) ? agentTools.map(String) : ['search_knowledge']).filter(
       (name: string) => deps.tools[name] && (isRunAdmin || !deps.tools[name].adminOnly),
     );

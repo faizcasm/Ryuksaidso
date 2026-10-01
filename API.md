@@ -28,7 +28,7 @@ Exemptions (no CSRF header needed):
 ### Role model
 
 - **Workspace roles** (`Membership.role`): `OWNER`, `ADMIN`, `AGENT`, `VIEWER`. Most reads require only authentication; writes are gated per route (documented below).
-- **System roles** (`User.userRole`): `USER`, `ADMIN`. Only system admins pass `requireAdmin` on `/admin/users*`; the other `/admin/*` routes accept workspace `OWNER`/`ADMIN` or a system admin.
+- **System roles** (`User.userRole`): `USER`, `ADMIN`. Only system admins pass `requireAdmin` on `/admin/users*` (including `GET /admin/users/overview`), and only system admins pass the `systemAdmin()` resolver on `/admin/observability/*`; the other `/admin/*` routes accept workspace `OWNER`/`ADMIN` or a system admin.
 
 ## Error envelope
 
@@ -128,7 +128,7 @@ All routes require auth. Mutations marked with roles beyond authentication are e
 - `POST /documents` — **OWNER/ADMIN/AGENT**. `{ title, content, source?, agentId?, metadata? }` (content max 2 MB). `201` document; `404` when `agentId` is not in the workspace.
 - `GET /agents` — flat agent list (name-ordered).
 - `PATCH /agents/:id` — **OWNER/ADMIN**. Same body as `PATCH /control/agents/:id`.
-- `GET /tools` — merged tool metadata (built-in registry + configured MCP tools), `execute` functions stripped. Admin-only tools (`adminOnly`) are filtered out for members without the `OWNER`/`ADMIN` role — 46 entries for admins, 34 otherwise.
+- `GET /tools` — merged tool metadata (built-in registry + configured MCP tools), `execute` functions stripped. Admin-only tools (`adminOnly`) are filtered out unless the caller's system role is `ADMIN` — 46 entries for system admins, 34 otherwise (workspace `OWNER`/`ADMIN` members included).
 
 ## Account & workspace — `/api` (authenticated)
 
@@ -176,18 +176,19 @@ All routes require auth. Mutations marked with roles beyond authentication are e
 
 ## Admin — `/api/admin`
 
-`requireAuth` for all; workspace `OWNER`/`ADMIN` or system `ADMIN` for most; `requireAdmin` (system `ADMIN`, session auth only — API keys rejected) for the first two.
+`requireAuth` for all; system `ADMIN` for `/admin/users*` and `/admin/observability/*`; workspace `OWNER`/`ADMIN` or system `ADMIN` for the rest.
 
 - `GET /admin/users` — **system ADMIN**. All users with system role and this workspace's membership role.
 - `PATCH /admin/users/:userId/role` — **system ADMIN**. `{ userRole: USER | ADMIN }`. `400` invalid role or self-demotion; `404` unknown user.
+- `GET /admin/users/overview` — **system ADMIN**. Cross-workspace user details: `{ totals, registrations, roleSplit, topUsers, users, truncated, generatedAt }` — per-user status (`active`/`idle`/`new`), projects, agents, runs and tokens attributed through the user's organization memberships, plus a daily registration series and a token/run leaderboard. Capped at the 500 newest accounts (`truncated: true` beyond that).
 - `GET /admin/me/role` — `{ user, isAdmin }` for the caller.
 - `GET /admin/overview` — 14-day operational overview: org + provider, counts (members/projects/agents/documents/pending approvals/sessions/api keys/open tickets/verified members), daily run series, top agents, provider/status splits, registrations, top tools, live health probes (Postgres/Redis/LLM with latencies), recent runs, members, audit logs. `Cache-Control: no-store`.
 - `GET /admin/runs?limit=` — `limit` 1–250 (default 100) runs with approvals and ordered steps.
-- `GET /admin/observability/summary?sinceMinutes=` — service health probes (Postgres/Redis/API/Web/LLM/OmniRoute), system metrics (CPU/memory/disk/load), request statistics from the Redis ring buffer, Prometheus/Loki/Grafana backend detection and a presentational payload (`{ status, stats, services, system, backends, presentation }`). `403` for non-admin members.
-- `GET /admin/observability/errors?sinceMinutes=&limit=&source=` — merged error stream (ring-buffer request 5xx/4xx + captured error logs + Loki when reachable), secrets redacted, `rootCause` hint and a visual `presentation`. `403` for non-admin members.
-- `GET /admin/observability/requests?sinceMinutes=&status=&method=&path=&q=&limit=` — searchable request log with request IDs. `403` for non-admin members.
-- `GET /admin/observability/backends` — `{ prometheus, loki, grafana, sources }` capability report (configured/reachable per backend). `403` for non-admin members.
-- All four: `Cache-Control: no-store`.
+- `GET /admin/observability/summary?sinceMinutes=` — **system ADMIN**. Service health probes (Postgres/Redis/API/Web/LLM/OmniRoute), system metrics (CPU/memory/disk/load), request statistics from the Redis ring buffer, Prometheus/Loki/Grafana backend detection and a presentational payload (`{ status, stats, services, system, backends, presentation }`). `403` for everyone else.
+- `GET /admin/observability/errors?sinceMinutes=&limit=&source=` — **system ADMIN**. Merged error stream (ring-buffer request 5xx/4xx + captured error logs + Loki when reachable), secrets redacted, `rootCause` hint and a visual `presentation`. `403` for everyone else.
+- `GET /admin/observability/requests?sinceMinutes=&status=&method=&path=&q=&limit=` — **system ADMIN**. Searchable request log with request IDs. `403` for everyone else.
+- `GET /admin/observability/backends` — **system ADMIN**. `{ prometheus, loki, grafana, sources }` capability report (configured/reachable per backend). `403` for everyone else.
+- All four set `Cache-Control: no-store` and resolve the caller's system role from the database on every request; an API key passes only when its owner is a system admin.
 - `GET /admin/audit?limit=` — `limit` 1–500 (default 200) audit entries.
 - `PATCH /admin/members/:id/role` — workspace role change with the same guard rails as `/members/:id/role` (plus self-demotion blocked).
 - `POST /admin/members/:id/revoke-sessions` — revokes all sessions of the member behind the membership. `204`; `404`.

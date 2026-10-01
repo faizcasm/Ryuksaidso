@@ -37,6 +37,7 @@ import {
   Plus,
   RefreshCw,
   Rocket,
+  Search,
   Settings2,
   Shield,
   ShieldCheck,
@@ -322,6 +323,49 @@ type AdminOverview = {
   }[];
 };
 
+type SystemUsersOverview = {
+  totals: {
+    users: number;
+    admins: number;
+    verified: number;
+    workspaces: number;
+    activeSessions: number;
+    projects: number;
+    agents: number;
+    runs: number;
+    tokens: number;
+  };
+  registrations: { daily: { date: string; new: number }[]; beforeWindow: number };
+  roleSplit: { role: string; users: number }[];
+  topUsers: { id: string; name: string; runs: number; tokens: number }[];
+  users: {
+    id: string;
+    name: string;
+    email: string;
+    userRole: string;
+    verified: boolean;
+    status: "active" | "idle" | "new";
+    createdAt: string;
+    lastActiveAt: string | null;
+    activeSessions: number;
+    projects: number;
+    agents: number;
+    runs: number;
+    tokens: number;
+    orgs: {
+      id: string;
+      name: string;
+      role: string;
+      projects: number;
+      agents: number;
+      runs: number;
+      tokens: number;
+    }[];
+  }[];
+  truncated: boolean;
+  generatedAt: string;
+};
+
 type IconType = ComponentType<{ size?: number; strokeWidth?: number }>;
 const mainNav: Array<[string, IconType]> = [
   ["Command Center", Activity],
@@ -467,6 +511,7 @@ export default function AppShell() {
   const [workspaceName, setWorkspaceName] = useState("");
   const [members, setMembers] = useState<AdminOverview["members"]>([]);
   const [adminData, setAdminData] = useState<AdminOverview | null>(null);
+  const [adminUsers, setAdminUsers] = useState<SystemUsersOverview | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [invites, setInvites] = useState<WorkspaceInvite[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -581,8 +626,12 @@ export default function AppShell() {
   }
   async function loadAdmin() {
     try {
-      const data = await api<AdminOverview>("/admin/overview");
+      const [data, users] = await Promise.all([
+        api<AdminOverview>("/admin/overview"),
+        api<SystemUsersOverview>("/admin/users/overview").catch(() => null),
+      ]);
       setAdminData(data);
+      setAdminUsers(users);
       setAdminUpdatedAt(data.generatedAt || new Date().toISOString());
     } catch (e) {
       setError(readError(e, "Could not load admin dashboard"));
@@ -1580,6 +1629,7 @@ export default function AppShell() {
           {tab === "Admin" && isSystemAdmin && (
             <AdminView
               data={adminData}
+              users={adminUsers}
               viewerRole={user.role}
               viewerSystemRole={user.userRole ?? "USER"}
               providerState={providerState}
@@ -2866,6 +2916,17 @@ function TicketsView({
   );
 }
 
+function traceInputText(run: Run): string {
+  const input: unknown = run.input;
+  if (input && typeof input === "object") {
+    const record = input as Record<string, unknown>;
+    const text = record.prompt ?? record.message;
+    if (typeof text === "string" && text.trim()) return text;
+    return JSON.stringify(input, null, 2);
+  }
+  return String(input ?? "");
+}
+
 function TracesView({
   runs,
   selected,
@@ -2877,6 +2938,14 @@ function TracesView({
   onSelect: (id: string) => void;
   onRetry: (id: string) => void;
 }) {
+  const detailRef = useRef<HTMLElement | null>(null);
+  const selectedId = selected?.id ?? null;
+  useEffect(() => {
+    if (!selectedId || typeof window === "undefined") return;
+    if (window.innerWidth <= 850) {
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [selectedId]);
   return (
     <div className="page">
       <div className="hero compact">
@@ -2922,7 +2991,7 @@ function TracesView({
             />
           )}
         </section>
-        <section className="panel trace-detail">
+        <section className="panel trace-detail" ref={detailRef}>
           {!selected ? (
             <div className="trace-empty">
               <Workflow size={30} />
@@ -2979,7 +3048,7 @@ function TracesView({
               </div>
               <div className="trace-input">
                 <span className="eyebrow">INPUT</span>
-                <p>{String(selected.input?.prompt || "")}</p>
+                <p>{traceInputText(selected)}</p>
               </div>
               {selected.error && (
                 <div className="step-error full">{selected.error}</div>
@@ -4337,6 +4406,7 @@ function SettingsView({
 
 function AdminView({
   data,
+  users,
   viewerRole,
   viewerSystemRole,
   providerState,
@@ -4348,6 +4418,7 @@ function AdminView({
   updatedAt,
 }: {
   data: AdminOverview | null;
+  users: SystemUsersOverview | null;
   viewerRole: string;
   viewerSystemRole: string;
   providerState: ProviderState | null;
@@ -4514,7 +4585,8 @@ function AdminView({
           </div>
         </div>
       </div>
-      <ObservabilitySection viewerRole={viewerRole} viewerSystemRole={viewerSystemRole} />
+      <ObservabilitySection viewerSystemRole={viewerSystemRole} />
+      {viewerSystemRole === "ADMIN" && users && <SystemUsersSection users={users} />}
       <div className="admin-grid">
         <section className="panel">
           <PanelHeader
@@ -4858,6 +4930,197 @@ function AdminView({
   );
 }
 
+function SystemUsersSection({ users }: { users: SystemUsersOverview }) {
+  const [query, setQuery] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const daily = users.registrations.daily;
+  const cumulative = daily.reduce<number[]>(
+    (acc, day, i) => [...acc, (i ? acc[i - 1] : users.registrations.beforeWindow) + day.new],
+    [],
+  );
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return users.users;
+    return users.users.filter(
+      (u) =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        u.orgs.some((o) => o.name.toLowerCase().includes(q)),
+    );
+  }, [query, users.users]);
+  const joinedInWindow = daily.reduce((n, day) => n + day.new, 0);
+  const topTokens = Math.max(1, users.topUsers[0]?.tokens ?? 1);
+  return (
+    <>
+      <section className="panel admin-users-panel" id="system-users">
+        <PanelHeader
+          icon={Users}
+          title="System users"
+          sub={`${users.totals.users} accounts across ${users.totals.workspaces} workspace${users.totals.workspaces === 1 ? "" : "s"}${users.truncated ? " · newest 500 shown" : ""}`}
+        />
+        <div className="metric-grid admin-user-metrics">
+          <Metric icon={Users} label="Total users" value={users.totals.users} />
+          <Metric icon={ShieldCheck} label="System admins" value={users.totals.admins} />
+          <Metric icon={CircleCheck} label="Verified emails" value={`${users.totals.verified}/${users.totals.users}`} />
+          <Metric icon={Layers3} label="Workspaces" value={users.totals.workspaces} />
+          <Metric icon={Activity} label="Active sessions" value={users.totals.activeSessions} />
+          <Metric icon={Play} label="Total runs" value={users.totals.runs.toLocaleString()} />
+          <Metric icon={Bot} label="Agents" value={users.totals.agents.toLocaleString()} />
+          <Metric icon={Zap} label="Tokens consumed" value={users.totals.tokens.toLocaleString()} />
+        </div>
+        <div className="user-table">
+          <div className="user-table-tools">
+            <Search size={14} />
+            <input
+              className="user-search"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setExpandedId(null);
+              }}
+              placeholder="Filter by name, email or workspace…"
+            />
+          </div>
+          <div className="user-table-head">
+            <span>User</span>
+            <span>Role</span>
+            <span>Workspaces</span>
+            <span className="num">Projects</span>
+            <span className="num">Agents</span>
+            <span className="num">Runs</span>
+            <span className="num">Tokens</span>
+            <span>Last active</span>
+          </div>
+          {filtered.map((u) => (
+            <div className="user-entry" key={u.id}>
+              <button
+                type="button"
+                className={`user-row ${expandedId === u.id ? "open" : ""}`}
+                aria-expanded={expandedId === u.id}
+                onClick={() => setExpandedId(expandedId === u.id ? null : u.id)}
+              >
+                <div className="user-identity">
+                  <div className="avatar small">{u.name.slice(0, 1).toUpperCase()}</div>
+                  <div>
+                    <b>
+                      {u.name}
+                      {u.verified && <Check size={12} className="user-verified" />}
+                    </b>
+                    <span>{u.email}</span>
+                  </div>
+                </div>
+                <span className={`user-role ${u.userRole === "ADMIN" ? "admin" : ""}`} data-label="Role">
+                  {u.userRole}
+                </span>
+                <span className="user-orgs" data-label="Workspaces">
+                  {u.orgs.length ? u.orgs.map((o) => o.name).join(", ") : "No workspace"}
+                </span>
+                <b className="num" data-label="Projects">
+                  {u.projects}
+                </b>
+                <b className="num" data-label="Agents">
+                  {u.agents}
+                </b>
+                <b className="num" data-label="Runs">
+                  {u.runs.toLocaleString()}
+                </b>
+                <b className="num" data-label="Tokens">
+                  {u.tokens.toLocaleString()}
+                </b>
+                <small data-label="Last active">{u.lastActiveAt ? formatWhen(u.lastActiveAt) : "Never"}</small>
+              </button>
+              {expandedId === u.id && (
+                <div className="user-detail">
+                  <div className="user-detail-facts">
+                    <span className={`user-status ${u.status}`}>{u.status}</span>
+                    <span>Joined {formatWhen(u.createdAt)}</span>
+                    <span>
+                      {u.activeSessions} active session{u.activeSessions === 1 ? "" : "s"}
+                    </span>
+                    <span>{u.verified ? "Email verified" : "Email unverified"}</span>
+                  </div>
+                  {u.orgs.length ? (
+                    <div className="user-org-table">
+                      <div className="user-org-head">
+                        <span>Workspace</span>
+                        <span>Role</span>
+                        <span className="num">Projects</span>
+                        <span className="num">Agents</span>
+                        <span className="num">Runs</span>
+                        <span className="num">Tokens</span>
+                      </div>
+                      {u.orgs.map((o) => (
+                        <div className="user-org-row" key={o.id}>
+                          <b>{o.name}</b>
+                          <span className={`user-role ${o.role === "OWNER" || o.role === "ADMIN" ? "admin" : ""}`} data-label="Role">
+                            {o.role}
+                          </span>
+                          <b className="num" data-label="Projects">
+                            {o.projects}
+                          </b>
+                          <b className="num" data-label="Agents">
+                            {o.agents}
+                          </b>
+                          <b className="num" data-label="Runs">
+                            {o.runs.toLocaleString()}
+                          </b>
+                          <b className="num" data-label="Tokens">
+                            {o.tokens.toLocaleString()}
+                          </b>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="user-detail-empty">Not a member of any workspace yet.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+          {!filtered.length && (
+            <Empty title="No matching users" text="Clear the filter to see every registered account." />
+          )}
+        </div>
+      </section>
+      <div className="admin-grid">
+        <section className="panel">
+          <PanelHeader
+            icon={LineChart}
+            title="User growth"
+            sub="Cumulative registrations with daily signups"
+          />
+          <AreaChart values={cumulative} labels={daily.map((d) => d.date.slice(5))} />
+          <div className="chart-footnote">
+            <span>{joinedInWindow} joined in window</span>
+            <span>{users.registrations.beforeWindow} predate window</span>
+          </div>
+        </section>
+        <section className="panel">
+          <PanelHeader icon={Gauge} title="Top users" sub="Ranked by tokens consumed" />
+          <div className="agent-ranking">
+            {users.topUsers.map((u) => (
+              <div key={u.id}>
+                <div>
+                  <b>{u.name}</b>
+                  <span>
+                    {u.runs} runs · {u.tokens.toLocaleString()} tokens
+                  </span>
+                </div>
+                <div className="rank-track">
+                  <i style={{ width: `${Math.min(100, (u.tokens / topTokens) * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+            {!users.topUsers.length && (
+              <Empty title="No users yet" text="Registered accounts will show up here." />
+            )}
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}
+
 function StepOutput({ step }: { step: any }) {
   const raw = step?.output ?? step?.input;
   const presentation = presentationOf(raw);
@@ -4992,8 +5255,8 @@ function ObsCard({ data }: { data: ObsPresentationData }) {
   );
 }
 
-function ObservabilitySection({ viewerRole, viewerSystemRole }: { viewerRole: string; viewerSystemRole: string }) {
-  const allowed = viewerRole === "OWNER" || viewerRole === "ADMIN" || viewerSystemRole === "ADMIN";
+function ObservabilitySection({ viewerSystemRole }: { viewerSystemRole: string }) {
+  const allowed = viewerSystemRole === "ADMIN";
   const [summary, setSummary] = useState<any>(null);
   const [errorsData, setErrorsData] = useState<any>(null);
   const [requests, setRequests] = useState<any>(null);

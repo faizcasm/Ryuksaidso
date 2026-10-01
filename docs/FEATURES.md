@@ -28,10 +28,10 @@
 - Files: `fs_list`, `fs_read`, `fs_search`, `fs_write` (approval-gated) — sandboxed to `<FILES_ROOT>/<organizationId>`, path traversal rejected, works in the API, worker and agent runtime
 - Email: `search_email`, `read_email` (automatic), `send_email`, `reply_email` (confirmation required) — IMAP inbox + SMTP out (`IMAP_*` optional, host derived from SMTP), sent mail persisted as `EmailRecord`, messages redacted before storage
 - Calendar: `calendar_list_events` (automatic), `calendar_create_event`, `calendar_update_event`, `calendar_delete_event` (approval-gated) — org-scoped `CalendarEvent` records
-- Database (admin-only): `database_schema`, `database_query`, `database_explain`, `database_insert`, `database_update` — single statement, `SELECT`/`WITH` only, dangerous-function denylist, identifier regex, parameterized values, secret-column redaction, forced `organizationId` on writes
-- Observability (admin-only): `get_observability_summary`, `get_service_health`, `get_system_metrics`, `get_recent_errors`, `search_request_logs`, `prometheus_query`, `loki_query` — API-native request/log ring buffer works out of the box; Prometheus and Loki activate automatically when the stack is reachable; everything read-only, redacted and audit-logged
+- Database (system-admin only): `database_schema`, `database_query`, `database_explain`, `database_insert`, `database_update` — single statement, `SELECT`/`WITH` only, dangerous-function denylist, identifier regex, parameterized values, secret-column redaction, forced `organizationId` on writes
+- Observability (system-admin only): `get_observability_summary`, `get_service_health`, `get_system_metrics`, `get_recent_errors`, `search_request_logs`, `prometheus_query`, `loki_query` — API-native request/log ring buffer works out of the box; Prometheus and Loki activate automatically when the stack is reachable; everything read-only, redacted and audit-logged
 - MCP integrations: any MCP server configured through `MCP_SERVERS` (stdio command or HTTP URL) appears as `mcp__<server>__<tool>`; write-like tool names require human approval
-- Tool errors return `{error}` payloads instead of failing the whole run; `adminOnly` tools throw `403` for non-admin callers and are hidden from their catalog
+- Tool errors return `{error}` payloads instead of failing the whole run; `adminOnly` tools (Database, Observability) throw `403` for callers who are not system admins and are hidden from their catalog
 
 ## Model routing
 

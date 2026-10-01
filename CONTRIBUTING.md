@@ -21,7 +21,7 @@ pnpm db:migrate         # apply migrations to the local DATABASE_URL
 
 pnpm lint               # ESLint flat config (eslint.config.mjs)
 pnpm typecheck          # tsc --noEmit across all workspaces
-pnpm test               # vitest — 166 tests in apps/api/src/__tests__
+pnpm test               # vitest — 178 tests in apps/api/src/__tests__
 pnpm build              # api/worker/packages tsc + prisma, web next build
 
 pnpm dev                # api (:4001) + web (:3000) + worker in parallel

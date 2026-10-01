@@ -1,5 +1,5 @@
 export type ToolContext = {
-  user: { id: string; email: string; name: string; organizationId: string; role: string };
+  user: { id: string; email: string; name: string; organizationId: string; role: string; userRole?: string };
   runId: string;
   agentId?: string | null;
 };
@@ -32,6 +32,10 @@ export const ADMIN_ROLES = ['OWNER', 'ADMIN'];
 
 export function isAdminRole(role: string | undefined | null): boolean {
   return ADMIN_ROLES.includes(String(role ?? ''));
+}
+
+export function isSystemAdmin(user: { userRole?: string | null } | null | undefined): boolean {
+  return String(user?.userRole ?? '') === 'ADMIN';
 }
 
 export function toolAllowedForRole(tool: Pick<ToolDef, 'adminOnly'>, role: string | undefined | null): boolean {

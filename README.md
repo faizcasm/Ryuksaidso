@@ -21,7 +21,7 @@ The original support-workspace codebase has been reworked into a multi-tenant pl
 - Agent registry with enabled/disabled state and immutable version records (publishing pins `project.productionVersion`).
 - Async execution using Redis + BullMQ with retries and backoff.
 - Durable agent runs with persisted planner/tool/synthesizer trace steps.
-- Tool gateway with tenant-scoped retrieval and policy-gated write tools (46 built-in tools — knowledge, tickets, calculator/weather/news/currency/unit/dictionary/text, web search with news/docs/domain/recency filters, page fetch, 8 discrete GitHub tools, workspace file system, email, calendar — plus admin-only database and observability tools and MCP servers via `MCP_SERVERS`).
+- Tool gateway with tenant-scoped retrieval and policy-gated write tools (46 built-in tools — knowledge, tickets, calculator/weather/news/currency/unit/dictionary/text, web search with news/docs/domain/recency filters, page fetch, 8 discrete GitHub tools, workspace file system, email, calendar — plus system-admin-only database and observability tools and MCP servers via `MCP_SERVERS`).
 - Human approval queue for consequential actions, including continuation runs after approval.
 - Run retry flow that creates a new persisted run instead of mutating history.
 - Knowledge documents stored in PostgreSQL with organization-scoped retrieval.
@@ -161,7 +161,7 @@ The workspace default provider/model is selected per organization in **Settings 
 ```bash
 pnpm lint         # ESLint flat config (eslint.config.mjs), no-unused-vars etc.
 pnpm typecheck    # tsc --noEmit across api/web/worker/packages
-pnpm test         # vitest — 166 tests in apps/api/src/__tests__
+pnpm test         # vitest — 178 tests in apps/api/src/__tests__
 pnpm build        # prisma generate + tsc for api/worker/packages, next build for web
 pnpm db:generate  # prisma client
 pnpm db:migrate   # apply Prisma migrations
@@ -171,7 +171,7 @@ Project convention: **source files must not contain comments** — no `//`, no `
 
 ## Testing summary
 
-- 12 vitest files, **166 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, tool governance (admin-only gating, SQL/file-system guards, secret redaction, approval flags, search filters), evaluator, regressions and HTTP server routes.
+- 13 vitest files, **178 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, tool governance (system-admin-only gating, SQL/file-system guards, secret redaction, approval flags, search filters), system users overview builder, evaluator, regressions and HTTP server routes.
 - Tests are hermetic (mocked Prisma/Redis) and run in CI after `pnpm db:generate`.
 - The worker/agent-runtime packages have no standalone unit tests; their behaviour is exercised through the API harness and the running stack.
 

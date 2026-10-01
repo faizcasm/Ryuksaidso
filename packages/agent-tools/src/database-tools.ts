@@ -1,5 +1,5 @@
 import { softFail } from './util';
-import { isAdminRole, type ToolDef } from './types';
+import { isSystemAdmin, type ToolDef } from './types';
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const MAX_ROWS = 500;
@@ -8,7 +8,7 @@ const WRITE_KEYWORDS = /\b(insert|update|delete|merge|drop|alter|truncate|create
 const DANGEROUS_CALLS = /\b(pg_sleep|pg_read_file|pg_read_binary_file|pg_ls_dir|dblink|lo_import|lo_export|pg_terminate_backend|pg_cancel_backend)\s*\(/i;
 
 function assertAdmin(ctx: any) {
-  if (!isAdminRole(ctx?.user?.role)) {
+  if (!isSystemAdmin(ctx?.user)) {
     const error: any = new Error('403 Forbidden: database tools are restricted to administrators');
     error.statusCode = 403;
     throw error;

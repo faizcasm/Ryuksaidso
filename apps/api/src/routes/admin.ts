@@ -4,6 +4,7 @@ import { redis } from '../lib/redis';
 import { providerConfig, type LLMProviderName } from '../lib/config';
 import { requireAuth, requireAdmin, type AuthenticatedRequest } from '../middleware';
 import { audit, type AuthUser } from '../lib/auth';
+import { buildSystemUsersOverview } from '../lib/admin-users';
 import { getBackends, getObservabilitySummary, getRecentErrors, searchRequestLogs } from '@ryuksaidso/agent-tools';
 
 export const adminRouter = Router();
@@ -17,6 +18,14 @@ async function admin(req: AuthenticatedRequest): Promise<AuthUser> {
   const system = await prisma.user.findUnique({ where: { id: user.id }, select: { userRole: true } });
   if (!membershipOk && system?.userRole !== 'ADMIN') throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
   return { ...user, role: membership?.role ?? 'VIEWER', userRole: system?.userRole ?? 'USER' };
+}
+
+async function systemAdmin(req: AuthenticatedRequest): Promise<AuthUser> {
+  const user = req.user;
+  if (!user) throw new Error('Authenticated user missing');
+  const system = await prisma.user.findUnique({ where: { id: user.id }, select: { userRole: true } });
+  if (system?.userRole !== 'ADMIN') throw Object.assign(new Error('Admin access required'), { statusCode: 403 });
+  return { ...user, userRole: 'ADMIN' };
 }
 
 adminRouter.get('/users', requireAdmin, async (req, res) => {
@@ -87,6 +96,59 @@ adminRouter.patch('/users/:userId/role', requireAdmin, async (req, res) => {
       return res.status(403).json({ error: 'Forbidden', message: 'Admin access required' });
     }
     res.status(500).json({ error: 'InternalError', message: 'Failed to update user role' });
+  }
+});
+
+adminRouter.get('/users/overview', requireAdmin, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.set('Pragma', 'no-cache');
+  try {
+    const now = new Date();
+    const windowStart = new Date(now);
+    windowStart.setDate(windowStart.getDate() - 14);
+    windowStart.setHours(0, 0, 0, 0);
+
+    const [users, totalUsers, totalOrgs, projectCounts, agentCounts, runCounts, lastSeenRows, activeSessionRows, newInWindow] = await Promise.all([
+      prisma.user.findMany({
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          userRole: true,
+          emailVerifiedAt: true,
+          createdAt: true,
+          memberships: { select: { role: true, organization: { select: { id: true, name: true } } } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+      prisma.user.count(),
+      prisma.organization.count(),
+      prisma.project.groupBy({ by: ['organizationId'], _count: { _all: true } }),
+      prisma.agent.groupBy({ by: ['organizationId'], _count: { _all: true } }),
+      prisma.agentRun.groupBy({ by: ['organizationId'], _count: { _all: true }, _sum: { tokenUsage: true } }),
+      prisma.session.groupBy({ by: ['userId'], _max: { createdAt: true } }),
+      prisma.session.groupBy({ by: ['userId'], where: { revokedAt: null, expiresAt: { gt: now } }, _count: { _all: true } }),
+      prisma.user.count({ where: { createdAt: { gte: windowStart } } }),
+    ]);
+
+    res.json(buildSystemUsersOverview({
+      users,
+      totalUsers,
+      totalOrgs,
+      windowStart,
+      newInWindow,
+      orgProjectCounts: projectCounts.map((row: any) => ({ organizationId: String(row.organizationId), count: Number(row._count?._all ?? 0) })),
+      orgAgentCounts: agentCounts.map((row: any) => ({ organizationId: String(row.organizationId), count: Number(row._count?._all ?? 0) })),
+      orgRunCounts: runCounts.map((row: any) => ({ organizationId: String(row.organizationId), count: Number(row._count?._all ?? 0), tokens: Number(row._sum?.tokenUsage ?? 0) })),
+      lastSeen: lastSeenRows.map((row: any) => ({ userId: String(row.userId), lastSeenAt: row._max?.createdAt ?? null })),
+      activeSessions: activeSessionRows.map((row: any) => ({ userId: String(row.userId), count: Number(row._count?._all ?? 0) })),
+    }));
+  } catch (e) {
+    if ((e as any)?.statusCode === 403) {
+      return res.status(403).json({ error: 'Forbidden', message: 'Admin access required' });
+    }
+    res.status(500).json({ error: 'InternalError', message: 'Failed to fetch system users' });
   }
 });
 
@@ -271,13 +333,13 @@ adminRouter.get('/audit', async (req, res) => {
 
 adminRouter.get('/observability/summary', async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  await admin(req as AuthenticatedRequest);
+  await systemAdmin(req as AuthenticatedRequest);
   res.json(await getObservabilitySummary({ prisma, redis }));
 });
 
 adminRouter.get('/observability/errors', async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  await admin(req as AuthenticatedRequest);
+  await systemAdmin(req as AuthenticatedRequest);
   res.json(await getRecentErrors({ prisma, redis }, {
     sinceMinutes: Number(req.query.sinceMinutes) || undefined,
     limit: Number(req.query.limit) || undefined,
@@ -286,7 +348,7 @@ adminRouter.get('/observability/errors', async (req, res) => {
 
 adminRouter.get('/observability/requests', async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  await admin(req as AuthenticatedRequest);
+  await systemAdmin(req as AuthenticatedRequest);
   res.json(await searchRequestLogs({ prisma, redis }, {
     q: String(req.query.q ?? ''),
     status: String(req.query.status ?? ''),
@@ -298,7 +360,7 @@ adminRouter.get('/observability/requests', async (req, res) => {
 
 adminRouter.get('/observability/backends', async (req, res) => {
   res.set('Cache-Control', 'no-store');
-  await admin(req as AuthenticatedRequest);
+  await systemAdmin(req as AuthenticatedRequest);
   res.json(await getBackends());
 });
 

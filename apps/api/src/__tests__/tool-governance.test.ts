@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   OBS_LOGS_KEY,
   OBS_REQUESTS_KEY,
@@ -9,18 +9,26 @@ import {
   getObservabilitySummary,
   getRecentErrors,
   isAdminRole,
+  isSystemAdmin,
   redactSecrets,
   searchRequestLogs,
   toolAllowedForRole,
 } from '@ryuksaidso/agent-tools';
 import { createApp } from '../server';
 import { signToken } from '../lib/auth';
+import { prisma } from '../lib/db';
+
+vi.mock('../lib/db', () => ({
+  prisma: {
+    user: { findUnique: vi.fn() }
+  }
+}));
 
 process.env.PROMETHEUS_URL = 'http://127.0.0.1:9';
 process.env.LOKI_URL = 'http://127.0.0.1:9';
 
-const ctxFor = (role: string) => ({
-  user: { id: 'u1', email: 'user@test.local', name: 'User', organizationId: 'org1', role },
+const ctxFor = (role: string, userRole?: string) => ({
+  user: { id: 'u1', email: 'user@test.local', name: 'User', organizationId: 'org1', role, userRole },
   runId: 'run1',
 });
 
@@ -65,6 +73,15 @@ describe('role helpers', () => {
     expect(toolAllowedForRole({ adminOnly: true }, 'OWNER')).toBe(true);
     expect(toolAllowedForRole({}, 'VIEWER')).toBe(true);
     expect(toolAllowedForRole({}, undefined)).toBe(true);
+  });
+
+  it('grants admin tool access only to the system ADMIN role', () => {
+    expect(isSystemAdmin({ userRole: 'ADMIN' })).toBe(true);
+    expect(isSystemAdmin({ userRole: 'USER' })).toBe(false);
+    expect(isSystemAdmin({ userRole: undefined })).toBe(false);
+    expect(isSystemAdmin({})).toBe(false);
+    expect(isSystemAdmin(null)).toBe(false);
+    expect(isSystemAdmin(undefined)).toBe(false);
   });
 });
 
@@ -123,24 +140,32 @@ describe('database tool guards', () => {
     expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
   });
 
+  it('rejects workspace OWNER/ADMIN members who are not system admins', async () => {
+    for (const role of ['OWNER', 'ADMIN']) {
+      await expect(tools.database_query.execute({ sql: 'SELECT 1' }, ctxFor(role) as any))
+        .rejects.toThrow(/403 Forbidden/);
+    }
+    expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
+  });
+
   it('only allows a single SELECT or WITH statement', async () => {
-    const out = await tools.database_query.execute({ sql: 'DELETE FROM "Ticket"' }, ctxFor('OWNER') as any) as any;
+    const out = await tools.database_query.execute({ sql: 'DELETE FROM "Ticket"' }, ctxFor('OWNER', 'ADMIN') as any) as any;
     expect(out.error).toMatch(/Only SELECT/);
-    const multi = await tools.database_query.execute({ sql: 'SELECT 1; DROP TABLE "User"' }, ctxFor('OWNER') as any) as any;
+    const multi = await tools.database_query.execute({ sql: 'SELECT 1; DROP TABLE "User"' }, ctxFor('OWNER', 'ADMIN') as any) as any;
     expect(multi.error).toMatch(/single SQL statement/);
-    const ddl = await tools.database_query.execute({ sql: 'CREATE TABLE evil (id int)' }, ctxFor('OWNER') as any) as any;
+    const ddl = await tools.database_query.execute({ sql: 'CREATE TABLE evil (id int)' }, ctxFor('OWNER', 'ADMIN') as any) as any;
     expect(ddl.error).toMatch(/Only SELECT/);
     expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
   });
 
   it('blocks dangerous PostgreSQL functions', async () => {
-    const out = await tools.database_query.execute({ sql: "SELECT pg_read_file('/etc/passwd')" }, ctxFor('OWNER') as any) as any;
+    const out = await tools.database_query.execute({ sql: "SELECT pg_read_file('/etc/passwd')" }, ctxFor('OWNER', 'ADMIN') as any) as any;
     expect(out.error).toMatch(/blocked/);
     expect(prisma.$queryRawUnsafe).not.toHaveBeenCalled();
   });
 
   it('executes read queries and redacts secret columns from rows', async () => {
-    const out = await tools.database_query.execute({ sql: 'SELECT id, name, "passwordHash" FROM "User"', limit: 10 }, ctxFor('OWNER') as any) as any;
+    const out = await tools.database_query.execute({ sql: 'SELECT id, name, "passwordHash" FROM "User"', limit: 10 }, ctxFor('OWNER', 'ADMIN') as any) as any;
     expect(out.error).toBeUndefined();
     expect(out.rowCount).toBe(1);
     expect(out.rows[0].passwordHash).toBe('[REDACTED]');
@@ -150,14 +175,14 @@ describe('database tool guards', () => {
   });
 
   it('validates identifiers and columns for inserts and forces the caller organization', async () => {
-    const badTable = await tools.database_insert.execute({ table: 'Ticket; DROP TABLE x', values: { name: 'a' } }, ctxFor('OWNER') as any) as any;
+    const badTable = await tools.database_insert.execute({ table: 'Ticket; DROP TABLE x', values: { name: 'a' } }, ctxFor('OWNER', 'ADMIN') as any) as any;
     expect(badTable.error).toMatch(/Invalid table name/);
-    const badColumn = await tools.database_insert.execute({ table: 'Ticket', values: { 'bad col': 1 } }, ctxFor('OWNER') as any) as any;
+    const badColumn = await tools.database_insert.execute({ table: 'Ticket', values: { 'bad col': 1 } }, ctxFor('OWNER', 'ADMIN') as any) as any;
     expect(badColumn.error).toMatch(/Invalid column name/);
-    const unknownColumn = await tools.database_insert.execute({ table: 'Ticket', values: { nope: 1 } }, ctxFor('OWNER') as any) as any;
+    const unknownColumn = await tools.database_insert.execute({ table: 'Ticket', values: { nope: 1 } }, ctxFor('OWNER', 'ADMIN') as any) as any;
     expect(unknownColumn.error).toMatch(/Unknown column/);
     (prisma.$queryRawUnsafe as any).mockClear();
-    await tools.database_insert.execute({ table: 'Ticket', values: { name: 'keep', organizationId: 'evil-org' } }, ctxFor('OWNER') as any);
+    await tools.database_insert.execute({ table: 'Ticket', values: { name: 'keep', organizationId: 'evil-org' } }, ctxFor('OWNER', 'ADMIN') as any);
     expect(prisma.$queryRawUnsafe).toHaveBeenCalledTimes(1);
     const [sql, ...params] = (prisma.$queryRawUnsafe as any).mock.calls[0];
     expect(sql).toMatch(/INSERT INTO "Ticket"/);
@@ -166,7 +191,7 @@ describe('database tool guards', () => {
   });
 
   it('requires a where filter for updates', async () => {
-    const out = await tools.database_update.execute({ table: 'Ticket', values: { name: 'x' }, where: {} }, ctxFor('OWNER') as any) as any;
+    const out = await tools.database_update.execute({ table: 'Ticket', values: { name: 'x' }, where: {} }, ctxFor('OWNER', 'ADMIN') as any) as any;
     expect(out.error).toMatch(/where must be a non-empty object/);
   });
 });
@@ -179,6 +204,15 @@ describe('observability tools (admin-only + presentation payloads)', () => {
       await expect(obs[name].execute({ query: 'up', sinceMinutes: 5, limit: 5 }, ctxFor('AGENT') as any))
         .rejects.toThrow(/403 Forbidden/);
     }
+  });
+
+  it('throws 403 for workspace owners who are not system admins', async () => {
+    for (const name of ADMIN_TOOLS.slice(5)) {
+      await expect(obs[name].execute({ query: 'up', sinceMinutes: 5, limit: 5 }, ctxFor('OWNER') as any))
+        .rejects.toThrow(/403 Forbidden/);
+    }
+    await expect(obs.get_observability_summary.execute({}, ctxFor('ADMIN') as any))
+      .rejects.toThrow(/403 Forbidden/);
   });
 
   it('produces a visual presentation payload with a root cause when errors exist', async () => {
@@ -390,7 +424,8 @@ describe('web_search filters (news, domain and recency filtering)', () => {
 
 describe('GET /api/tools role filtering', () => {
   const app = createApp();
-  const owner = signToken({ id: 'o1', email: 'owner@test.local', name: 'Owner', organizationId: 'org1', role: 'OWNER' });
+  const owner = signToken({ id: 'o1', email: 'owner@test.local', name: 'Owner', organizationId: 'org1', role: 'OWNER', userRole: 'ADMIN' });
+  const ownerUser = signToken({ id: 'o3', email: 'workspace-owner@test.local', name: 'Workspace Owner', organizationId: 'org1', role: 'OWNER', userRole: 'USER' });
   const viewer = signToken({ id: 'v1', email: 'viewer@test.local', name: 'Viewer', organizationId: 'org1', role: 'VIEWER' });
 
   it('requires authentication', async () => {
@@ -398,7 +433,7 @@ describe('GET /api/tools role filtering', () => {
     expect(response.status).toBe(401);
   });
 
-  it('serves the full catalog including admin tools to admins', async () => {
+  it('serves the full catalog including admin tools to system admins', async () => {
     const response = await request(app).get('/api/tools').set('Authorization', `Bearer ${owner}`);
     expect(response.status).toBe(200);
     const names = (response.body as Array<{ name: string }>).map((tool) => tool.name);
@@ -416,5 +451,50 @@ describe('GET /api/tools role filtering', () => {
     expect(names).toContain('fetch_page');
     expect(names).toContain('send_email');
     expect(names.length).toBeGreaterThan(20);
+  });
+
+  it('hides database and observability tools from workspace owners who are not system admins', async () => {
+    const response = await request(app).get('/api/tools').set('Authorization', `Bearer ${ownerUser}`);
+    expect(response.status).toBe(200);
+    const names = (response.body as Array<{ name: string }>).map((tool) => tool.name);
+    for (const name of ADMIN_TOOLS) expect(names).not.toContain(name);
+    expect(names).toContain('web_search');
+    expect(names).toContain('fs_read');
+  });
+});
+
+describe('admin endpoints require the system ADMIN role', () => {
+  const app = createApp();
+  const ownerUser = signToken({ id: 'o5', email: 'ws-owner@test.local', name: 'WS Owner', organizationId: 'org1', role: 'OWNER', userRole: 'USER' });
+  const viewer = signToken({ id: 'v3', email: 'viewer3@test.local', name: 'Viewer', organizationId: 'org1', role: 'VIEWER' });
+
+  beforeEach(() => {
+    vi.mocked(prisma.user.findUnique).mockReset();
+  });
+
+  it('rejects requests without credentials', async () => {
+    const response = await request(app).get('/api/admin/observability/summary');
+    expect(response.status).toBe(401);
+  });
+
+  it('rejects workspace owners who are not system admins', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ userRole: 'USER' } as never);
+    const response = await request(app).get('/api/admin/observability/summary').set('Authorization', `Bearer ${ownerUser}`);
+    expect(response.status).toBe(403);
+    expect(response.body.message).toMatch(/Admin access required/);
+  });
+
+  it('rejects viewers on every observability endpoint', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ userRole: 'USER' } as never);
+    for (const path of ['/api/admin/observability/errors', '/api/admin/observability/requests', '/api/admin/observability/backends']) {
+      const response = await request(app).get(path).set('Authorization', `Bearer ${viewer}`);
+      expect(response.status).toBe(403);
+    }
+  });
+
+  it('rejects non system admins from the system users overview', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ userRole: 'USER' } as never);
+    const response = await request(app).get('/api/admin/users/overview').set('Authorization', `Bearer ${ownerUser}`);
+    expect(response.status).toBe(403);
   });
 });

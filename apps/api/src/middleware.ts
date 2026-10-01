@@ -36,7 +36,7 @@ async function prismaApiKeyLookup(tokenHash: string) {
     ?? await prisma.membership.findFirst({ where: { organizationId: key.organizationId }, include: { user: true } });
   if (!membership) return null;
   await prisma.apiKey.update({ where: { id: key.id }, data: { lastUsedAt: new Date() } });
-  return { user: { id: membership.user.id, email: membership.user.email, name: membership.user.name, organizationId: key.organizationId, role: membership.role } as AuthUser };
+  return { user: { id: membership.user.id, email: membership.user.email, name: membership.user.name, organizationId: key.organizationId, role: membership.role, userRole: membership.user.userRole } as AuthUser };
 }
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {

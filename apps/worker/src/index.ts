@@ -191,7 +191,7 @@ const mcpToolsPromise: Promise<Record<string, ToolDef>> = mcpConfigured()
 const runtimeTools = async (): Promise<Record<string, ToolDef>> => ({ ...staticTools, ...(await mcpToolsPromise) });
 
 const worker = new Worker('agent-runs', async (job) => {
-  const user = job.data.user as { id:string; email:string; name:string; organizationId:string; role:string };
+  const user = job.data.user as { id:string; email:string; name:string; organizationId:string; role:string; userRole?:string };
   if (user.organizationId !== job.data.organizationId) throw new Error('Job tenant mismatch');
 
   return executeAgentRun({

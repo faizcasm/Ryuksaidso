@@ -1,7 +1,7 @@
 import * as fsp from 'node:fs/promises';
 import * as os from 'node:os';
 import { redactSecrets, softFail } from './util';
-import { isAdminRole, type ObsRedis, type ToolDef } from './types';
+import { isSystemAdmin, type ObsRedis, type ToolDef } from './types';
 
 export const OBS_REQUESTS_KEY = 'obs:requests';
 export const OBS_LOGS_KEY = 'obs:logs';
@@ -588,7 +588,7 @@ export async function getObservabilitySummary(deps: Deps) {
 }
 
 function assertAdmin(ctx: any) {
-  if (!isAdminRole(ctx?.user?.role)) {
+  if (!isSystemAdmin(ctx?.user)) {
     const error: any = new Error('403 Forbidden: observability tools are restricted to administrators');
     error.statusCode = 403;
     throw error;

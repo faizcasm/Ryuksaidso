@@ -28,23 +28,24 @@ Listed endpoints: `GET/PATCH /api/members`, `DELETE /api/members/:id`, `GET/POST
 
 Roles: `USER` (default at registration), `ADMIN`.
 
-- Gates the **Admin** navigation item and the system-admin API routes enforced by the `requireAdmin` middleware: `GET /api/admin/users` and `PATCH /api/admin/users/:userId/role` (`{ "userRole": "USER" | "ADMIN" }`).
+- Gates the **Admin** navigation item, the **System users** panel and the observability UI/API routes. System-admin API routes enforced by the `requireAdmin` middleware: `GET /api/admin/users`, `PATCH /api/admin/users/:userId/role` (`{ "userRole": "USER" | "ADMIN" }`) and `GET /api/admin/users/overview` (cross-workspace user details with per-user projects, agents, runs and tokens).
 - `requireAdmin` **rejects API keys** (`403`) — system-admin actions require a session.
+- `GET /api/admin/observability/*` (summary, errors, requests, backends) resolves the caller's system role directly from the database (`systemAdmin()`) and returns `403` for everyone else; an API key passes only when its owner is a system admin.
 - Self-demotion to `USER` is blocked (`400`).
 - Bootstrap: emails listed in the `SYSTEM_ADMIN_EMAILS` env var (comma-separated, lowercased) are promoted to `ADMIN` at sign-in, token refresh and `/me`. The allowlist only promotes; explicit grants/revocations through the endpoint stay authoritative. Leave it empty to disable auto-promotion.
 - Other `/api/admin/*` routes (`overview`, `runs`, `audit`, member role management) accept workspace `OWNER`/`ADMIN` **or** a system admin via the `admin()` resolver.
 
 ### Admin-only agent tools
 
-Twelve tools carry the `adminOnly` flag and are restricted to workspace `OWNER`/`ADMIN` members (or a system admin):
+Twelve tools carry the `adminOnly` flag and are restricted to **system admins** (`User.userRole === 'ADMIN'`). Workspace membership roles (`OWNER`/`ADMIN`) do **not** grant them — system `USER` accounts never see these two tool categories:
 
 - **Database** (read/write): `database_schema`, `database_query`, `database_explain`, `database_insert`, `database_update` — single-statement, `SELECT`/`WITH`-only queries, identifier validation, parameterized values, secret-column redaction and forced `organizationId` on writes.
 - **Observability**: `get_observability_summary`, `get_service_health`, `get_system_metrics`, `get_recent_errors`, `search_request_logs`, `prometheus_query`, `loki_query` — read-only, secrets redacted at capture and read time, every execution audit-logged.
 
 Enforced on the server in three layers:
 
-1. `GET /api/tools` filters `adminOnly` tools out of the catalog for non-admin members (46 tools for admins, 34 for everyone else).
-2. The run-time tool gateway re-checks the caller's membership role when a run starts and returns `403 Forbidden` (recorded as a `tool.denied` audit event) if an admin tool is invoked by a non-admin.
+1. `GET /api/tools` filters `adminOnly` tools out of the catalog unless the caller's system role is `ADMIN` (46 tools for system admins, 34 for everyone else — including workspace `OWNER`/`ADMIN` members).
+2. The run-time tool gateway re-checks the caller's system role when a run starts and returns `403 Forbidden` (recorded as a `tool.denied` audit event) if an admin tool is invoked by a caller who is not a system admin. API-key-triggered runs inherit the system role of the key's owner.
 3. Each admin tool's own `execute` throws `statusCode: 403` before touching the database or any backend.
 
 All side-effecting tools (database writes, `fs_write`, `send_email`, `reply_email`, GitHub mutations, calendar mutations) set `requiresApproval: true` regardless of role — read-only tools (`search_email`, `read_email`, `fs_read`, `fs_list`, `fs_search`, GitHub reads, `fetch_page`, `web_search`, calendar reads) run automatically.
@@ -87,4 +88,4 @@ curl -s -X PATCH http://localhost:4001/api/admin/users/<userId>/role \
   -d '{"userRole":"ADMIN"}'
 ```
 
-Automated coverage lives in `apps/api/src/__tests__/middleware.test.ts` (CSRF, API-key and admin gates), `tool-governance.test.ts` (admin-only tool gating, 403 enforcement, SQL/file guards, redaction) and `auth.test.ts` / `auth-helpers.test.ts` (session and password flows).
+Automated coverage lives in `apps/api/src/__tests__/middleware.test.ts` (CSRF, API-key and admin gates), `tool-governance.test.ts` (system-admin-only tool gating, 403 enforcement, SQL/file guards, redaction, admin endpoint gating) and `auth.test.ts` / `auth-helpers.test.ts` (session and password flows).
