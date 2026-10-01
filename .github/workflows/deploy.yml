@@ -59,6 +59,12 @@ jobs:
           ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" 'mkdir -p /opt/ryuksaidso'
           tar czf - docker-compose.prod.yml docker-compose.tls.yml infra | \
             ssh -p "${EC2_PORT:-22}" "${EC2_USER:-ec2-user}@${EC2_HOST}" '
+              set -euo pipefail
+              avail="$(df -Pk /opt/ryuksaidso | awk "NR==2{print \$4}")"
+              if [ "$avail" -lt 512000 ]; then
+                echo "Refusing release sync: only ${avail}KB free on /opt/ryuksaidso" >&2
+                exit 1
+              fi
               staging="$(mktemp -d)"
               trap "rm -rf \"$staging\"" EXIT
               tar xzf - -C "$staging"
