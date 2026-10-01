@@ -28,7 +28,16 @@ const obsStream = new Writable({
     callback();
   },
 });
-const logger = pino({ level: process.env.LOG_LEVEL || 'info' }, obsStream);
+const pinoLevel = (() => {
+  const requested = (process.env.LOG_LEVEL || 'info').toLowerCase();
+  const map: Record<string, string> = {
+    error: 'error', warn: 'warn', info: 'info', http: 'info',
+    verbose: 'debug', debug: 'debug', silly: 'trace',
+    fatal: 'fatal', silent: 'silent', trace: 'trace',
+  };
+  return map[requested] ?? 'info';
+})();
+const logger = pino({ level: pinoLevel }, obsStream);
 
 type ChatMessage = { role: 'system'|'user'|'assistant'; content: string };
 
