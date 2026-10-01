@@ -428,7 +428,7 @@ html[data-theme='light'] .obs-rid{color:#0369a1}
 
 @media(max-width:850px){
   .trace-list{max-height:360px}
-  .trace-detail{min-height:0}
+  .trace-detail{min-height:0;scroll-margin-top:74px}
   .trace-empty{min-height:200px;padding:34px 16px}
   .hero.compact{align-items:flex-start}
 }
