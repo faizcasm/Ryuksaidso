@@ -868,6 +868,35 @@ describe('integrations routes', () => {
     );
   });
 
+  it('creates a GitHub source from the workspace connection when no token env is set', async () => {
+    vi.mocked(prisma.integrationConnection.findFirst).mockResolvedValue({ id: 'conn-gh', provider: 'github', status: 'CONNECTED', createdAt: new Date('2026-10-02T00:00:00.000Z') } as never);
+    vi.mocked(prisma.knowledgeSource.create).mockImplementation((async (args: any) => ({ id: 'src2', ...args.data })) as any);
+    const response = await request(app)
+      .post('/api/integrations/sources')
+      .set(auth(OWNER_TOKEN))
+      .send({ provider: 'github', name: 'Scientist Graph', remotePath: 'https://github.com/faizcasm/scientistgraph.git' });
+    expect(response.status).toBe(201);
+    expect(prisma.integrationConnection.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ provider: 'github', status: { not: 'DISCONNECTED' } }) }),
+    );
+    expect(prisma.knowledgeSource.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ provider: 'github', connectionId: 'conn-gh', remotePath: 'https://github.com/faizcasm/scientistgraph.git' }) }),
+    );
+  });
+
+  it('auto-picks an active connection for other knowledge providers', async () => {
+    vi.mocked(prisma.integrationConnection.findFirst).mockResolvedValue({ id: 'conn-drv', provider: 'google_drive', status: 'CONNECTED', createdAt: new Date('2026-10-02T00:00:00.000Z') } as never);
+    vi.mocked(prisma.knowledgeSource.create).mockImplementation((async (args: any) => ({ id: 'src3', ...args.data })) as any);
+    const response = await request(app)
+      .post('/api/integrations/sources')
+      .set(auth(OWNER_TOKEN))
+      .send({ provider: 'google_drive', name: 'Specs', remotePath: 'folder-1' });
+    expect(response.status).toBe(201);
+    expect(prisma.knowledgeSource.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ provider: 'google_drive', connectionId: 'conn-drv' }) }),
+    );
+  });
+
   it('creates webhook endpoints with generated secrets', async () => {
     vi.mocked(prisma.webhookEndpoint.create).mockImplementation((async (args: any) => ({ id: 'ep9', ...args.data })) as any);
     const response = await request(app)

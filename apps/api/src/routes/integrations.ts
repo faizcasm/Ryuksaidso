@@ -346,10 +346,19 @@ integrationsRouter.post('/sources', async (req, res, next) => {
       });
       if (!connection) return res.status(404).json({ error: 'NotFound', message: 'Connection not found' });
       if (connection.status === 'DISCONNECTED') return res.status(409).json({ error: 'Conflict', message: 'Reconnect this integration before adding sources' });
-    } else if (provider.key !== 'github') {
-      return res.status(400).json({ error: 'BadRequest', message: `Connect ${provider.name} first, then add a knowledge source` });
-    } else if (!process.env.GITHUB_TOKEN?.trim()) {
-      return res.status(400).json({ error: 'BadRequest', message: 'Connect GitHub or set GITHUB_TOKEN to sync repositories' });
+    } else {
+      connection = await prisma.integrationConnection.findFirst({
+        where: { organizationId: u.organizationId, provider: provider.key, status: { not: 'DISCONNECTED' } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!connection) {
+        if (provider.key !== 'github') {
+          return res.status(400).json({ error: 'BadRequest', message: `Connect ${provider.name} first, then add a knowledge source` });
+        }
+        if (!process.env.GITHUB_TOKEN?.trim()) {
+          return res.status(400).json({ error: 'BadRequest', message: 'Connect GitHub or set GITHUB_TOKEN to sync repositories' });
+        }
+      }
     }
     const source = await prisma.knowledgeSource.create({
       data: {
