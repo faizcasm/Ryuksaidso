@@ -22,6 +22,7 @@ Server-side guards are `requireRole([...])` inside routes (returns `403 Insuffic
 - Role changes revoke the target member's active sessions.
 - Invitations can only grant `ADMIN|AGENT|VIEWER` (default `VIEWER`) and must be accepted by the invited email address.
 - Billing changes (checkout, plan switch, cancellation) are restricted to `OWNER|ADMIN` and, when the global enforcement toggle is on, quota/feature limits answer `402 PaymentRequired` after the role and validation checks — see [BILLING.md](BILLING.md).
+- Integrations: every member may read the marketplace catalog, connections, knowledge sources, webhook endpoints, activity and widget settings; `OWNER|ADMIN` is required to connect/disconnect providers, manage sources, create/delete webhook endpoints, and change widget settings or its public key — see [INTEGRATIONS.md](INTEGRATIONS.md).
 
 Listed endpoints: `GET/PATCH /api/members`, `DELETE /api/members/:id`, `GET/POST /api/workspace/invitations`, `DELETE /api/workspace/invitations/:id`, `POST /api/workspace/invitations/accept`, `GET/POST/PATCH /api/api-keys` and `DELETE /api/api-keys/:id` (OWNER/ADMIN only), mirrored by `PATCH /api/admin/members/:id/role` and `POST /api/admin/members/:id/revoke-sessions`.
 
@@ -31,6 +32,7 @@ Roles: `USER` (default at registration), `ADMIN`.
 
 - Gates the **Admin** navigation item, the **System users** panel and the observability UI/API routes. System-admin API routes enforced by the `requireAdmin` middleware: `GET /api/admin/users`, `PATCH /api/admin/users/:userId/role` (`{ "userRole": "USER" | "ADMIN" }`) and `GET /api/admin/users/overview` (cross-workspace user details with per-user projects, agents, runs and tokens).
 - Gates the entire billing administration surface: `/api/admin/billing/*` (overview, plans CRUD, subscriptions list/action/status override, payments, webhooks, enforcement toggle) resolves the caller's system role from the database on every request (`systemAdmin()`) and returns `403` for everyone else. Every billing admin action is audit-logged.
+- Gates the integration administration surface: `/api/admin/integrations/*` (overview, platform enable switch, per-provider kill switches, cross-workspace logs) uses the same database-resolved `systemAdmin()` guard and returns `403` otherwise. Workspace roles never grant the platform switch.
 - `requireAdmin` **rejects API keys** (`403`) — system-admin actions require a session.
 - `GET /api/admin/observability/*` (summary, errors, requests, backends) resolves the caller's system role directly from the database (`systemAdmin()`) and returns `403` for everyone else; an API key passes only when its owner is a system admin.
 - Self-demotion to `USER` is blocked (`400`).

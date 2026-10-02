@@ -3,7 +3,7 @@ import Redis from 'ioredis';
 import { PrismaClient } from '@prisma/client';
 import pino from 'pino';
 import { executeAgentRun } from '@ryuksaidso/agent-runtime';
-import { buildTools, loadMcpTools, mcpConfigured, appendObsLog, type ToolDef } from '@ryuksaidso/agent-tools';
+import { buildTools, loadMcpTools, mcpConfigured, appendObsLog, emitWebhookEvent, runDueSyncs, sweepPendingDeliveries, type ToolDef } from '@ryuksaidso/agent-tools';
 import { Writable } from 'node:stream';
 
 const redis = new Redis(process.env.REDIS_URL || 'redis://redis:6379', { maxRetriesPerRequest: null });
@@ -220,12 +220,76 @@ const worker = new Worker('agent-runs', async (job) => {
   limiter: { max: Number(process.env.WORKER_RATE_LIMIT_MAX || 20), duration: Number(process.env.WORKER_RATE_LIMIT_DURATION_MS || 1000) }
 });
 
-worker.on('completed', job => logger.info({ jobId: job.id }, 'job completed'));
-worker.on('failed', (job, error) => logger.error({ jobId: job?.id, error: error.message }, 'job failed'));
+const emittedRunEvents = new Set<string>();
+
+async function emitRunEvent(job: any, outcome: 'completed' | 'failed') {
+  try {
+    const runId = String(job?.data?.runId ?? '');
+    if (!runId || emittedRunEvents.has(runId)) return;
+    if (outcome === 'failed') {
+      const attempts = Number(job.opts?.attempts ?? 1);
+      if (Number(job.attemptsMade ?? 0) < attempts) return;
+    }
+    const run = await prisma.agentRun.findUnique({
+      where: { id: runId },
+      select: { id: true, status: true, organizationId: true, agentId: true, trigger: true, finishedAt: true, latencyMs: true },
+    });
+    if (!run) return;
+    if (outcome === 'completed' && run.status !== 'COMPLETED') return;
+    if (outcome === 'failed' && run.status === 'COMPLETED') return;
+    emittedRunEvents.add(runId);
+    if (emittedRunEvents.size > 2000) emittedRunEvents.clear();
+    await emitWebhookEvent(prisma, run.organizationId, `run.${outcome}`, {
+      runId: run.id,
+      status: run.status,
+      agentId: run.agentId,
+      trigger: run.trigger,
+      finishedAt: run.finishedAt,
+      latencyMs: run.latencyMs,
+    });
+  } catch {
+    return;
+  }
+}
+
+worker.on('completed', job => {
+  logger.info({ jobId: job.id }, 'job completed');
+  void emitRunEvent(job, 'completed');
+});
+worker.on('failed', (job, error) => {
+  logger.error({ jobId: job?.id, error: error.message }, 'job failed');
+  void emitRunEvent(job, 'failed');
+});
 worker.on('error', error => logger.error({ error: error.message }, 'worker error'));
+
+const MAINTENANCE_INTERVAL_MS = Number(process.env.INTEGRATION_MAINTENANCE_INTERVAL_MS || 15 * 60 * 1000);
+let maintenanceRunning = false;
+
+async function runMaintenance() {
+  if (maintenanceRunning) return;
+  maintenanceRunning = true;
+  try {
+    const syncs = await runDueSyncs(prisma);
+    if (syncs.checked) logger.info(syncs, 'knowledge sync sweep finished');
+    const deliveries = await sweepPendingDeliveries(prisma);
+    if (deliveries.delivered || deliveries.failed) logger.info(deliveries, 'webhook delivery sweep finished');
+    const pruned = await prisma.widgetSession.deleteMany({
+      where: { lastActiveAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+    });
+    if (pruned.count) logger.info({ pruned: pruned.count }, 'stale widget sessions pruned');
+  } catch (error) {
+    logger.error({ error: error instanceof Error ? error.message : String(error) }, 'integration maintenance failed');
+  } finally {
+    maintenanceRunning = false;
+  }
+}
+
+const maintenanceTimer = setInterval(() => void runMaintenance(), MAINTENANCE_INTERVAL_MS);
+setTimeout(() => void runMaintenance(), 45_000).unref?.();
 
 const shutdown = async (signal: string) => {
   logger.info({ signal }, 'shutting down worker');
+  clearInterval(maintenanceTimer);
   try {
     await worker.close();
   } catch (error) {

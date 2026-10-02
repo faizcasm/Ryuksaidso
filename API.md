@@ -226,6 +226,45 @@ Quota hooks elsewhere answer **`402 PaymentRequired`** when a limit is hit: `POS
 - `GET /admin/billing/webhooks` — newest 100 webhook deliveries (`eventId, eventType, status, error, receivedAt, processedAt`).
 - `GET /admin/billing/settings`, `PUT /admin/billing/settings` — `{ billingEnabled }` **global enforcement toggle**: off (default) = every workspace bypasses plan limits, on = quotas and feature gates are active.
 
+## Integrations — `/api/integrations`
+
+`requireAuth` for everything except the OAuth callback. Reads (catalog, connections, activity, widget settings) are open to every workspace member; connect/disconnect, sources, webhooks and widget writes require `OWNER|ADMIN`. Full guide: [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+
+- `GET /integrations/catalog` — `{ enabled, disabledProviders[], providers[] }` — the 15-provider marketplace with per-provider connection state (`connected`, `status`, `configured`, `setupHint`, `tokenFields`, tool and event lists). Credentials are never included.
+- `GET /integrations/connections` — `{ connections[] }`: `id`, `provider`, `name`, `status`, `scopes`, `profile`, `lastSyncAt`, `lastCheckedAt`, `lastError`, timestamps — no encrypted tokens.
+- `POST /integrations/connections/:provider/connect` — **OWNER|ADMIN**. Starts the OAuth dance (signed state in Redis, 10-minute TTL) → `{ url, redirectUri, expiresIn: 600 }`. `404` unknown provider, `400` non-OAuth provider or missing `{ shop }` for Shopify, `403` platform/provider disabled, `503` OAuth env vars missing.
+- `GET /integrations/:provider/callback` — **public, CSRF-exempt**. Exchanges the code (client-credentials-in-body or HTTP Basic per provider), encrypts the tokens with AES-256-GCM keyed from `JWT_SECRET`, upserts the `(organizationId, provider)` connection, writes an integration log, emits `integration.connected` and redirects to `${FRONTEND_URL}/dashboard?connected=<provider>` — failures redirect with `?connect_error=<reason>`.
+- `POST /integrations/connections/token` — body `{ provider, fields }` for token-type providers (Microsoft Teams `webhookUrl` must be https; WhatsApp `accessToken` + `phoneNumberId`). `201` connection summary, `400` validation.
+- `POST /integrations/connections/:id/test` — probes the provider API → `{ ok, detail, status }`.
+- `DELETE /integrations/connections/:id` — removes the credentials and emits `integration.disconnected`. `204`; `404` when the connection is not yours.
+- `GET /integrations/sources` · `POST /integrations/sources` — knowledge sources for Google Drive, Notion and GitHub (`{ provider, name, connectionId?, remotePath?, autoSync }`). `400` when the provider does not support sources or has no connection/`GITHUB_TOKEN`.
+- `PATCH /integrations/sources/:id` · `DELETE /integrations/sources/:id` — rename/re-path, pause auto-sync, or remove (`204`).
+- `POST /integrations/sources/:id/sync` — synchronous sync → `{ status, created, updated, unchanged, skipped, error? }`; the source row records `lastSyncAt`/`lastError`.
+- `GET /integrations/webhooks` — `{ endpoints[], deliveries[] (last 30), events[] }`.
+- `POST /integrations/webhooks` — body `{ name, url, events[] }` → `201` endpoint **including its `whsec_` signing secret (shown once)**. Private/internal URLs are rejected (`400`); unknown event names are rejected (`400`).
+- `DELETE /integrations/webhooks/:id` · `POST /integrations/webhooks/:id/test` — remove an endpoint (`204`) or queue a `webhook.test` delivery.
+- `POST /integrations/webhooks/deliveries/:id/retry` — retries a `FAILED` delivery → `{ ok, status, attempts }`.
+- `GET /integrations/activity?provider=&limit=` — the workspace's integration log (connects, syncs, refresh failures).
+- `GET /integrations/tool-activity?limit=` — agent tool-call history from `AgentStep`: `{ items[] }` with `tool`, `status`, `durationMs`, `error`, `runStatus`, `trigger`.
+- `GET /integrations/widget` · `PUT /integrations/widget` — widget settings (`{ enabled, agentId, title, greeting, accent, allowedOrigins[], collectEmail }`); the GET returns `{ setting, agent, embedPath }` including the `publicKey`.
+- `POST /integrations/widget/regenerate-key` — **OWNER|ADMIN**. New `publicKey` → `{ publicKey }`.
+
+## Chat widget — `/api/widget` (public, CSRF-exempt)
+
+Each route sets its own CORS headers (origin reflected, `Cross-Origin-Resource-Policy: cross-origin`) so the embed works from any site; rate-limited to 120 messages/min/IP.
+
+- `GET /widget.js` — the embeddable loader script (shadow-DOM bubble, polls for replies).
+- `GET /widget/:key/config` — `{ title, greeting, accent, collectEmail, agentName }`. `404` unknown key, `403` widget disabled or origin outside `allowedOrigins`.
+- `POST /widget/:key/messages` — body `{ content, sessionId?, email?, visitorId? }`. Verifies quota **before** creating anything (`402 PaymentRequired`), then creates the session + a `trigger: 'widget'` agent run and enqueues it → `201 { sessionId, pending: true }`. `400` invalid body, `403` origin, `429` rate limit.
+- `GET /widget/:key/sessions/:sessionId` — `{ pending, messages[] }` — materializes the assistant reply from the finished run's `output.answer`.
+
+## Integration administration — `/api/admin/integrations`
+
+`requireAuth` + **system `ADMIN` resolved from the database on every request** (`403` otherwise).
+
+- `GET /admin/integrations/overview` — `{ settings, connections { total, byStatus, byProvider }, sources { total, byStatus }, webhooks { endpoints, delivery24h }, recentErrors[], catalog { providers } }`.
+- `GET /admin/integrations/settings` · `PUT /admin/integrations/settings` — `{ enabled, disabledProviders[] }` — the platform-wide switch plus per-provider kill switches (`400` on unknown provider keys). Audit-logged as `admin.integration_settings_updated`.
+- `GET /admin/integrations/logs?level=&limit=` — newest platform-wide integration log entries with workspace names.
 
 ## Documentation endpoints — `/api` (public, no auth)
 

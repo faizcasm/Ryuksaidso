@@ -4,6 +4,7 @@ import { prisma } from '../lib/db';
 import { requireAuth, type AuthenticatedRequest } from '../middleware';
 import { approvalDecisionSchema } from '../validation';
 import { enqueueRun } from '../services/queue';
+import { emitWebhookEvent } from '@ryuksaidso/agent-tools';
 
 export const approvalRouter = Router();
 approvalRouter.use(requireAuth);
@@ -34,6 +35,12 @@ approvalRouter.post('/approvals/:id/decision', async (req, res) => {
     return;
   }
   const result = await prisma.approval.findUnique({ where: { id: approval.id } });
+  void emitWebhookEvent(
+    prisma,
+    u.organizationId,
+    body.approved ? 'approval.approved' : 'approval.rejected',
+    { approvalId: approval.id, action: approval.action },
+  ).catch(() => undefined);
   if (body.approved) {
     const sourceRun = await prisma.agentRun.findFirst({ where: { id: approval.runId, organizationId: u.organizationId } });
     if (sourceRun) {

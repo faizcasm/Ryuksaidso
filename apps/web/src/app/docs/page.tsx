@@ -21,6 +21,7 @@ import {
   Lock,
   Menu,
   Play,
+  Plug,
   Rocket,
   Search,
   Shield,
@@ -661,6 +662,87 @@ Content-Type: application/json
             <>Set <code>source</code> honestly (runbook, policy, faq) — it shows up in traces.</>,
             <>Rewrite stale pages instead of stacking corrections on top of them.</>,
             <>Knowledge is tenant-scoped: a document never leaks across workspaces.</>,
+          ]}
+        />
+      </>
+    ),
+  },
+  {
+    id: "integrations",
+    title: "Integrations",
+    kicker: "Connect email, chat, docs and webhooks",
+    icon: Plug,
+    group: "Core concepts",
+    toc: ["Connect a provider", "Knowledge sync", "Chat widget", "Outbound webhooks", "Admin controls"],
+    keywords: "integrations gmail outlook slack teams whatsapp drive notion github jira linear hubspot shopify zapier make n8n oauth webhook widget marketplace connect",
+    body: (
+      <>
+        <Lead>
+          Integrations are how the platform reaches outside itself: OAuth
+          connections to the tools you use, knowledge sync that keeps answers
+          current, an embeddable chat widget, and signed webhooks into Zapier,
+          Make, n8n or your own service. Every write is gated by workspace
+          roles and the same audit trail as the rest of the control plane.
+        </Lead>
+
+        <H>Connect a provider</H>
+        <Endpoints
+          items={[
+            ["GET", "/api/integrations/catalog", "15-provider marketplace with connection state — members can read, owners connect."],
+            ["POST", "/api/integrations/connections/:provider/connect", "Starts OAuth; returns the authorize URL and a 10-minute signed state."],
+            ["GET", "/api/integrations/:provider/callback", "Public callback: exchanges the code, encrypts tokens, redirects with ?connected=."],
+            ["POST", "/api/integrations/connections/token", "Token-type providers (Teams webhook URL, WhatsApp access token)."],
+          ]}
+        />
+        <Bullets
+          items={[
+            <>Tokens are encrypted with AES-256-GCM keyed from <code>JWT_SECRET</code> and never leave the server in a response.</>,
+            <>Providers without env credentials show a setup hint instead of a connect button.</>,
+            <>A <b>Test</b> action probes the provider and refreshes health timestamps.</>,
+            <>Disable anything you do not want from Integrations → Platform admin.</>,
+          ]}
+        />
+
+        <H>Knowledge sync</H>
+        <Bullets
+          items={[
+            <>Google Drive, Notion and GitHub sources upsert into the knowledge base as <code>Document</code> rows.</>,
+            <>A worker sweep re-syncs stale sources every 15 minutes while the platform switch is on.</>,
+            <>Manual sync, pause/resume and per-source <code>lastError</code> are in the dashboard.</>,
+          ]}
+        />
+
+        <H>Chat widget</H>
+        <Code
+          lang="html"
+          code={`<script src="https://your-api.example.com/api/widget.js"
+        data-key="wgt_..."
+        async></script>`}
+        />
+        <Bullets
+          items={[
+            <>One script tag gives any site a shadow-DOM chat bubble wired to your agents.</>,
+            <>Origin allow-lists, quota checks (402) and a 120/min/IP rate limit are enforced server-side.</>,
+            <>Conversations appear as normal runs with <code>trigger: widget</code> — traces, approvals and all.</>,
+          ]}
+        />
+
+        <H>Outbound webhooks</H>
+        <Bullets
+          items={[
+            <>Events: ticket/run/approval/document/integration/member/widget — subscribed per endpoint.</>,
+            <>Each delivery carries <code>x-ryuksaidso-signature</code>: HMAC-SHA256 of <code>timestamp.body</code> with your <code>whsec_</code> secret.</>,
+            <>Three attempts with backoff, a delivery log, and manual retry from the dashboard.</>,
+            <>Private/internal URLs are refused (SSRF guard).</>,
+          ]}
+        />
+
+        <H>Admin controls</H>
+        <Bullets
+          items={[
+            <>System admins get a platform-wide switch plus per-provider kill switches (Admin → Integrations).</>,
+            <>Off means no connects, no integration agent tools and no syncs — stored credentials stay put.</>,
+            <>Platform overview: connection health, source status, 24-hour delivery success and a cross-workspace error feed.</>,
           ]}
         />
       </>

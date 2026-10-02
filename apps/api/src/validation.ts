@@ -133,3 +133,60 @@ export const adminSubscriptionStatusSchema = z.object({
 export const billingSettingsSchema = z.object({
   billingEnabled: z.boolean()
 });
+
+export const connectTokenSchema = z.object({
+  provider: z.string().trim().regex(/^[a-z][a-z0-9_]{1,31}$/),
+  fields: z.record(z.string().trim().max(60), z.string().trim().max(2000)).default({}),
+  shop: z.string().trim().max(120).optional()
+});
+
+export const knowledgeSourceCreateSchema = z.object({
+  provider: z.string().trim().regex(/^[a-z][a-z0-9_]{1,31}$/),
+  connectionId: z.string().trim().max(60).optional(),
+  name: z.string().trim().min(1).max(120),
+  remotePath: z.string().trim().max(300).default(''),
+  autoSync: z.boolean().default(true)
+});
+
+export const knowledgeSourceUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  remotePath: z.string().trim().max(300).optional(),
+  autoSync: z.boolean().optional(),
+  status: z.enum(['ACTIVE', 'PAUSED']).optional()
+}).refine(v => Object.keys(v).length > 0);
+
+export const webhookEndpointCreateSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  url: z.string().trim().url().max(500),
+  events: z.array(z.string().trim().min(1).max(80)).min(1).max(30),
+  active: z.boolean().default(true)
+});
+
+export const webhookEndpointUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  url: z.string().trim().url().max(500).optional(),
+  events: z.array(z.string().trim().min(1).max(80)).min(1).max(30).optional(),
+  active: z.boolean().optional()
+}).refine(v => Object.keys(v).length > 0);
+
+export const widgetSettingsSchema = z.object({
+  enabled: z.boolean().optional(),
+  agentId: z.string().cuid().nullable().optional(),
+  title: z.string().trim().min(1).max(80).optional(),
+  greeting: z.string().trim().min(1).max(300).optional(),
+  accent: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  allowedOrigins: z.array(z.string().trim().url().max(200)).max(20).optional(),
+  collectEmail: z.boolean().optional()
+}).refine(v => Object.keys(v).length > 0);
+
+export const integrationSettingsSchema = z.object({
+  enabled: z.boolean().optional(),
+  disabledProviders: z.array(z.string().trim().regex(/^[a-z][a-z0-9_]{1,31}$/)).max(50).optional()
+}).refine(v => Object.keys(v).length > 0);
+
+export const widgetMessageSchema = z.object({
+  sessionId: z.string().trim().max(60).optional(),
+  content: z.string().trim().min(1).max(4000),
+  email: z.string().trim().email().max(320).optional(),
+  visitorId: z.string().trim().max(80).optional()
+});

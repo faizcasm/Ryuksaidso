@@ -23,6 +23,9 @@ import { requestId, csrfProtection, type AuthenticatedRequest } from './middlewa
 import { errorHandler, notFoundHandler } from './middleware-error';
 import { billingRouter } from './routes/billing';
 import { adminBillingRouter } from './routes/admin-billing';
+import { integrationsRouter } from './routes/integrations';
+import { adminIntegrationsRouter } from './routes/admin-integrations';
+import { widgetRouter, widgetCorsHeaders, widgetScriptHandler } from './routes/widget';
 import { captureRequest, ObsRingTransport } from './lib/obs';
 
 function bounded<T>(fn: () => Promise<T>, ms: number): Promise<T> {
@@ -43,6 +46,8 @@ export function createApp() {
 
   app.use(requestId);
   app.use(helmet());
+  app.use('/api/widget', widgetCorsHeaders);
+  app.get('/api/widget.js', widgetScriptHandler);
   app.use(cors({ origin: config.CORS_ORIGIN.split(',').map((x) => x.trim()), credentials: true }));
   app.use(compression());
   app.use(express.json({
@@ -134,6 +139,9 @@ export function createApp() {
   app.use('/api/control', controlRouter);
   app.use('/api/billing', billingRouter);
   app.use('/api/admin/billing', adminBillingRouter);
+  app.use('/api/widget', widgetRouter);
+  app.use('/api/integrations', integrationsRouter);
+  app.use('/api/admin/integrations', adminIntegrationsRouter);
   app.use('/api', appRouter);
   app.use('/api', accountRouter);
   app.use('/api', approvalRouter);

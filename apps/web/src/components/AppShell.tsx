@@ -34,6 +34,7 @@ import {
   Moon,
   Pencil,
   Play,
+  Plug,
   Plus,
   RefreshCw,
   Rocket,
@@ -59,6 +60,7 @@ import icon from "../app/icon.png";
 import { api, API } from "../lib/api";
 import { isAdmin as isAdminRole } from "../lib/roles";
 import { BillingAdminSection, BillingSection, EvalLockBanner } from "./Billing";
+import { IntegrationsView } from "./Integrations";
 
 type User = {
   id: string;
@@ -382,6 +384,7 @@ const mainNav: Array<[string, IconType]> = [
   ["Developer", Code2],
   ["Docs", Globe2],
   ["Architecture", Layers3],
+  ["Integrations", Plug],
   ["Settings", Settings2],
 ];
 
@@ -1291,6 +1294,18 @@ export default function AppShell() {
     if (params.get("billing") === "checkout") {
       setTab("Settings");
       window.history.replaceState({}, "", window.location.pathname);
+      return;
+    }
+    const connected = params.get("connected");
+    const connectError = params.get("connect_error");
+    if (connected || connectError) {
+      setTab("Integrations");
+      if (connected) {
+        notify(`The ${connected} integration is connected.`, "success");
+      } else {
+        notify(`Connection failed: ${decodeURIComponent(connectError || "")}`, "error");
+      }
+      window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
 
@@ -1606,6 +1621,13 @@ export default function AppShell() {
                 </button>
               </div>
             </div>
+          )}
+          {tab === "Integrations" && (
+            <IntegrationsView
+              canManage={canManageWorkspace}
+              systemRole={user?.userRole ?? null}
+              agents={agents}
+            />
           )}
           {tab === "Settings" && (
             <SettingsView

@@ -598,3 +598,157 @@ model CalendarEvent {
   organization Organization @relation(fields:[organizationId], references:[id], onDelete:Cascade)
   @@index([organizationId, startAt])
 }
+
+enum ConnectionStatus {
+  CONNECTED
+  DEGRADED
+  ERROR
+  EXPIRED
+  DISCONNECTED
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum KnowledgeSourceStatus {
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+model IntegrationSetting {
+  id String @id @default("global")
+  enabled Boolean @default(true)
+  disabledProviders String[] @default([])
+  updatedBy String @default("")
+  updatedAt DateTime @updatedAt
+}
+
+model IntegrationConnection {
+  id String @id @default(cuid())
+  organizationId String
+  provider String
+  name String @default("")
+  status ConnectionStatus @default(CONNECTED)
+  authType String @default("oauth2")
+  encryptedTokens String @default("")
+  profile Json?
+  scopes String[] @default([])
+  lastSyncAt DateTime?
+  lastCheckedAt DateTime?
+  lastError String @default("")
+  connectedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([organizationId, provider])
+  @@index([organizationId, status])
+}
+
+model IntegrationLog {
+  id String @id @default(cuid())
+  organizationId String
+  connectionId String?
+  provider String
+  level String @default("info")
+  event String
+  message String @default("")
+  metadata Json?
+  createdAt DateTime @default(now())
+  @@index([organizationId, createdAt])
+  @@index([organizationId, provider, createdAt])
+}
+
+model KnowledgeSource {
+  id String @id @default(cuid())
+  organizationId String
+  connectionId String
+  provider String
+  name String
+  remotePath String @default("")
+  status KnowledgeSourceStatus @default(ACTIVE)
+  autoSync Boolean @default(true)
+  lastSyncAt DateTime?
+  lastError String @default("")
+  documentsSynced Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([organizationId, provider])
+  @@index([status, lastSyncAt])
+}
+
+model WidgetSetting {
+  id String @id @default(cuid())
+  organizationId String @unique
+  publicKey String @unique
+  enabled Boolean @default(false)
+  agentId String?
+  title String @default("Chat with us")
+  greeting String @default("Hi! Ask me anything about our product.")
+  accent String @default("#8b5cf6")
+  allowedOrigins String[] @default([])
+  collectEmail Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WidgetSession {
+  id String @id @default(cuid())
+  organizationId String
+  settingId String
+  visitorId String @default("")
+  email String @default("")
+  userAgent String @default("")
+  createdAt DateTime @default(now())
+  lastActiveAt DateTime @default(now())
+  messages WidgetMessage[]
+  @@index([organizationId, createdAt])
+  @@index([settingId, lastActiveAt])
+}
+
+model WidgetMessage {
+  id String @id @default(cuid())
+  sessionId String
+  organizationId String
+  role String
+  content String
+  runId String? @unique
+  createdAt DateTime @default(now())
+  session WidgetSession @relation(fields:[sessionId], references:[id], onDelete:Cascade)
+  @@index([sessionId, createdAt])
+}
+
+model WebhookEndpoint {
+  id String @id @default(cuid())
+  organizationId String
+  name String
+  url String
+  secret String
+  events String[] @default([])
+  active Boolean @default(true)
+  lastDeliveryAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deliveries WebhookDelivery[]
+  @@index([organizationId])
+}
+
+model WebhookDelivery {
+  id String @id @default(cuid())
+  endpointId String
+  organizationId String
+  event String
+  eventId String
+  payload Json
+  status WebhookDeliveryStatus @default(PENDING)
+  attempts Int @default(0)
+  lastError String @default("")
+  createdAt DateTime @default(now())
+  deliveredAt DateTime?
+  endpoint WebhookEndpoint @relation(fields:[endpointId], references:[id], onDelete:Cascade)
+  @@unique([endpointId, eventId])
+  @@index([organizationId, createdAt])
+  @@index([endpointId, status])
+}

@@ -113,6 +113,23 @@
 - Provider-neutral schema and `BillingProvider` interface so Stripe can be added without touching routes
 - `402 PaymentRequired` error envelope with upgrade banners in the app
 
+## Integrations and automation
+
+- 15-provider marketplace: Gmail, Google Drive, Outlook, Slack, Microsoft Teams, WhatsApp Business, Notion, GitHub, Jira, Linear, HubSpot, Shopify, Zapier, Make and n8n
+- OAuth 2.0 connection system (authorize URL builder, code exchange, refresh with skew, per-provider probes) with signed short-lived state in Redis
+- Credentials encrypted at rest with AES-256-GCM keyed from `JWT_SECRET`; summaries and responses never expose tokens
+- Token-type connections for Microsoft Teams (incoming-webhook URL, https-only) and WhatsApp Business (access token + phone number id)
+- Agent tool integrations: ~23 soft-fail tools (Gmail search/read/send, Drive read/search, Slack messages, Teams/WhatsApp notify, Notion search/append, Jira/Linear/HubSpot/Shopify records) that use the org's stored connection and fall back to env tokens where allowed
+- Knowledge-base integrations with automatic syncing: Google Drive, Notion and GitHub sources upsert `Document`s (15-minute staleness sweep, manual "Sync now", pause/resume)
+- Website AI chat widget: embeddable loader script, shadow-DOM bubble, session + run materialization, origin allow-list, email capture, per-workspace public key
+- Outbound webhooks with HMAC-SHA256 signatures (`x-ryuksaidso-*` headers), 3 attempts with backoff, delivery log, manual retry, test delivery
+- Public event catalog: ticket/run/approval/document/integration/member/widget events
+- Zapier / Make / n8n presets create signed webhook endpoints in one click
+- Integration activity log and agent tool-call history (from the trace steps) in the dashboard
+- Health/status monitoring: connection status, `lastCheckedAt`, per-endpoint delivery success/failure (24h window), platform error feed
+- Admin controls: platform-wide enable switch and per-provider kill switches, platform overview, cross-workspace integration logs
+- Master switch semantics: disabling integrations blocks connects, agent tools and syncs; org webhook endpoints and the chat widget keep working
+
 ## Observability
 
 - Prometheus metrics

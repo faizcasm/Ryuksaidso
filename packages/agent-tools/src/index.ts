@@ -23,6 +23,9 @@ import { buildDatabaseTools } from './database-tools';
 import { buildEmailTools } from './email-tools';
 import { buildCalendarTools } from './calendar-tools';
 import { buildObservabilityTools } from './observability-tools';
+import { buildIntegrationTools } from './integrations/tools';
+import { setGithubTokenResolver } from './github-tools';
+import { getIntegrationSetting, loadTokens } from './integrations/connection';
 import { softFail } from './util';
 
 export type { ToolDef, ToolContext, BuildToolsDeps, ObsRedis } from './types';
@@ -37,6 +40,7 @@ export { buildEmailTools } from './email-tools';
 export { buildCalendarTools } from './calendar-tools';
 export * from './observability-tools';
 export { redactSecrets, assertPublicHttpUrl } from './util';
+export * from './integrations';
 export {
   currencyConvertTool,
   unitConvertTool,
@@ -61,6 +65,21 @@ export function knowledgeTerms(query: string): string[] {
 
 export function buildTools(deps: BuildToolsDeps): Record<string, ToolDef> {
   const { prisma } = deps;
+
+  setGithubTokenResolver(async (organizationId) => {
+    try {
+      const setting = await getIntegrationSetting(prisma);
+      if (!setting.enabled || setting.disabledProviders.includes('github')) return null;
+      const connection = await prisma.integrationConnection.findFirst({
+        where: { organizationId, provider: 'github', status: { not: 'DISCONNECTED' } },
+      });
+      if (!connection) return null;
+      const tokens = loadTokens(connection);
+      return tokens?.accessToken ?? null;
+    } catch {
+      return null;
+    }
+  });
 
   const builtIn: Record<string, ToolDef> = {
     search_knowledge: {
@@ -158,6 +177,7 @@ export function buildTools(deps: BuildToolsDeps): Record<string, ToolDef> {
     ...buildEmailTools(prisma),
     ...buildCalendarTools(prisma),
     ...buildObservabilityTools({ prisma, redis: deps.redis ?? null }),
+    ...buildIntegrationTools(deps),
   };
 
   return { ...builtIn, ...(deps.extra ?? {}) };

@@ -14,8 +14,30 @@ const issueNumber = (input: Record<string, unknown>): number => {
   return value;
 };
 
-async function githubApi(path: string, init: { method?: string; body?: unknown } = {}) {
-  const token = process.env.GITHUB_TOKEN?.trim();
+export type GithubTokenResolver = (organizationId: string) => Promise<string | null>;
+let githubTokenResolver: GithubTokenResolver | null = null;
+
+export function setGithubTokenResolver(resolver: GithubTokenResolver | null): void {
+  githubTokenResolver = resolver;
+}
+
+async function resolveGithubToken(organizationId: string): Promise<string> {
+  if (organizationId && githubTokenResolver) {
+    try {
+      const connected = await githubTokenResolver(organizationId);
+      if (connected?.trim()) return connected.trim();
+    } catch {
+      return process.env.GITHUB_TOKEN?.trim() ?? '';
+    }
+  }
+  return process.env.GITHUB_TOKEN?.trim() ?? '';
+}
+
+type ToolCtx = { user?: { organizationId?: string } } | undefined;
+const orgOf = (ctx: ToolCtx): string => ctx?.user?.organizationId ?? '';
+
+async function githubApi(path: string, init: { method?: string; body?: unknown } = {}, organizationId = '') {
+  const token = await resolveGithubToken(organizationId);
   const method = (init.method ?? 'GET').toUpperCase();
   const response = await fetch(`https://api.github.com${path}`, {
     method,
@@ -38,14 +60,15 @@ async function githubApi(path: string, init: { method?: string; body?: unknown }
   }
   if (!response.ok) {
     const message = data && typeof data === 'object' ? String(data.message ?? '') : String(data ?? '').slice(0, 200);
-    const hint = response.status === 401 ? ' — check GITHUB_TOKEN' : response.status === 403 ? ' — rate limited or missing permission' : '';
+    const hint = response.status === 401 ? ' — connect GitHub or check GITHUB_TOKEN' : response.status === 403 ? ' — rate limited or missing permission' : '';
     throw new Error(`GitHub ${response.status}: ${message || 'request failed'}${hint}`);
   }
   return data;
 }
 
-const requireToken = () => {
-  if (!process.env.GITHUB_TOKEN?.trim()) throw new Error('GITHUB_TOKEN is not configured — GitHub writes are unavailable.');
+const requireToken = async (organizationId: string) => {
+  const token = await resolveGithubToken(organizationId);
+  if (!token) throw new Error('GitHub is not connected — connect GitHub in Integrations or configure GITHUB_TOKEN.');
 };
 
 export const githubSearchReposTool = {
@@ -55,12 +78,12 @@ export const githubSearchReposTool = {
   category: 'Integrations',
   scope: 'github:read',
   requiresApproval: false,
-  execute: (input: Record<string, unknown>) =>
+  execute: (input: Record<string, unknown>, ctx?: ToolCtx) =>
     softFail(async () => {
       const query = str(input.query ?? input.q);
       if (!query) throw new Error('query is required');
       const limit = Math.min(Math.max(Number(input.limit ?? 5) || 5, 1), 20);
-      const data = await githubApi(`/search/repositories?q=${encodeURIComponent(query)}&per_page=${limit}`);
+      const data = await githubApi(`/search/repositories?q=${encodeURIComponent(query)}&per_page=${limit}`, {}, orgOf(ctx));
       return {
         query,
         results: (data?.items ?? []).map((repo: any) => ({
@@ -83,13 +106,13 @@ export const githubReadFileTool = {
   category: 'Integrations',
   scope: 'github:read',
   requiresApproval: false,
-  execute: (input: Record<string, unknown>) =>
+  execute: (input: Record<string, unknown>, ctx?: ToolCtx) =>
     softFail(async () => {
       const { owner, repo } = ownerRepo(input);
       const path = str(input.path).replace(/^\/+/, '');
       const ref = str(input.ref ?? input.branch);
       const query = ref ? `?ref=${encodeURIComponent(ref)}` : '';
-      const data = await githubApi(`/repos/${owner}/${repo}/contents/${path}${query}`);
+      const data = await githubApi(`/repos/${owner}/${repo}/contents/${path}${query}`, {}, orgOf(ctx));
       if (Array.isArray(data)) {
         return {
           path: path || '/',
@@ -122,21 +145,26 @@ export const githubCreateIssueTool = {
   category: 'Integrations',
   scope: 'github:write',
   requiresApproval: true,
-  execute: (input: Record<string, unknown>) =>
+  execute: (input: Record<string, unknown>, ctx?: ToolCtx) =>
     softFail(async () => {
-      requireToken();
+      const orgId = orgOf(ctx);
+      await requireToken(orgId);
       const { owner, repo } = ownerRepo(input);
       const title = str(input.title);
       if (!title) throw new Error('title is required');
-      const data = await githubApi(`/repos/${owner}/${repo}/issues`, {
-        method: 'POST',
-        body: {
-          title,
-          ...(str(input.body) ? { body: str(input.body) } : {}),
-          ...(Array.isArray(input.labels) && input.labels.length ? { labels: input.labels.map(String).slice(0, 20) } : {}),
-          ...(Array.isArray(input.assignees) && input.assignees.length ? { assignees: input.assignees.map(String).slice(0, 10) } : {}),
+      const data = await githubApi(
+        `/repos/${owner}/${repo}/issues`,
+        {
+          method: 'POST',
+          body: {
+            title,
+            ...(str(input.body) ? { body: str(input.body) } : {}),
+            ...(Array.isArray(input.labels) && input.labels.length ? { labels: input.labels.map(String).slice(0, 20) } : {}),
+            ...(Array.isArray(input.assignees) && input.assignees.length ? { assignees: input.assignees.map(String).slice(0, 10) } : {}),
+          },
         },
-      });
+        orgId,
+      );
       return { action: 'created_issue', number: data.number, title: data.title, state: data.state, url: data.html_url };
     }),
 };
@@ -148,9 +176,10 @@ export const githubUpdateIssueTool = {
   category: 'Integrations',
   scope: 'github:write',
   requiresApproval: true,
-  execute: (input: Record<string, unknown>) =>
+  execute: (input: Record<string, unknown>, ctx?: ToolCtx) =>
     softFail(async () => {
-      requireToken();
+      const orgId = orgOf(ctx);
+      await requireToken(orgId);
       const { owner, repo } = ownerRepo(input);
       const number = issueNumber(input);
       const patch: Record<string, unknown> = {};
@@ -159,7 +188,7 @@ export const githubUpdateIssueTool = {
       if (['open', 'closed'].includes(str(input.state))) patch.state = str(input.state);
       if (Array.isArray(input.labels)) patch.labels = input.labels.map(String).slice(0, 20);
       if (!Object.keys(patch).length) throw new Error('Provide at least one field to update (title, body, state or labels)');
-      const data = await githubApi(`/repos/${owner}/${repo}/issues/${number}`, { method: 'PATCH', body: patch });
+      const data = await githubApi(`/repos/${owner}/${repo}/issues/${number}`, { method: 'PATCH', body: patch }, orgId);
       return { action: 'updated_issue', number: data.number, title: data.title, state: data.state, url: data.html_url, updatedFields: Object.keys(patch) };
     }),
 };
@@ -171,14 +200,15 @@ export const githubCommentIssueTool = {
   category: 'Integrations',
   scope: 'github:write',
   requiresApproval: true,
-  execute: (input: Record<string, unknown>) =>
+  execute: (input: Record<string, unknown>, ctx?: ToolCtx) =>
     softFail(async () => {
-      requireToken();
+      const orgId = orgOf(ctx);
+      await requireToken(orgId);
       const { owner, repo } = ownerRepo(input);
       const number = issueNumber(input);
       const body = str(input.body ?? input.comment ?? input.content);
       if (!body) throw new Error('body is required');
-      const data = await githubApi(`/repos/${owner}/${repo}/issues/${number}/comments`, { method: 'POST', body: { body } });
+      const data = await githubApi(`/repos/${owner}/${repo}/issues/${number}/comments`, { method: 'POST', body: { body } }, orgId);
       return { action: 'commented', issueNumber: number, commentId: data.id, url: data.html_url, createdAt: data.created_at };
     }),
 };
@@ -190,24 +220,29 @@ export const githubCreateBranchTool = {
   category: 'Integrations',
   scope: 'github:write',
   requiresApproval: true,
-  execute: (input: Record<string, unknown>) =>
+  execute: (input: Record<string, unknown>, ctx?: ToolCtx) =>
     softFail(async () => {
-      requireToken();
+      const orgId = orgOf(ctx);
+      await requireToken(orgId);
       const { owner, repo } = ownerRepo(input);
       const branch = str(input.branch ?? input.name);
       if (!branch || !/^[A-Za-z0-9._/-]+$/.test(branch)) throw new Error('branch must be a valid git ref name');
       let base = str(input.fromBranch ?? input.base);
       if (!base) {
-        const repoData = await githubApi(`/repos/${owner}/${repo}`);
+        const repoData = await githubApi(`/repos/${owner}/${repo}`, {}, orgId);
         base = String(repoData?.default_branch ?? 'main');
       }
-      const ref = await githubApi(`/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(base)}`);
+      const ref = await githubApi(`/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(base)}`, {}, orgId);
       const sha = ref?.object?.sha;
       if (!sha) throw new Error(`Could not resolve commit for base branch "${base}"`);
-      const data = await githubApi(`/repos/${owner}/${repo}/git/refs`, {
-        method: 'POST',
-        body: { ref: `refs/heads/${branch}`, sha },
-      });
+      const data = await githubApi(
+        `/repos/${owner}/${repo}/git/refs`,
+        {
+          method: 'POST',
+          body: { ref: `refs/heads/${branch}`, sha },
+        },
+        orgId,
+      );
       return { action: 'created_branch', branch, fromBranch: base, sha, ref: data?.ref };
     }),
 };
@@ -219,12 +254,12 @@ export const githubGetPullRequestTool = {
   category: 'Integrations',
   scope: 'github:read',
   requiresApproval: false,
-  execute: (input: Record<string, unknown>) =>
+  execute: (input: Record<string, unknown>, ctx?: ToolCtx) =>
     softFail(async () => {
       const { owner, repo } = ownerRepo(input);
       const number = Number(input.pullNumber ?? input.pull_number ?? input.number);
       if (!Number.isInteger(number) || number <= 0) throw new Error('pullNumber must be a positive integer');
-      const data = await githubApi(`/repos/${owner}/${repo}/pulls/${number}`);
+      const data = await githubApi(`/repos/${owner}/${repo}/pulls/${number}`, {}, orgOf(ctx));
       return {
         number: data.number,
         title: data.title,
@@ -253,9 +288,10 @@ export const githubCreatePullRequestTool = {
   category: 'Integrations',
   scope: 'github:write',
   requiresApproval: true,
-  execute: (input: Record<string, unknown>) =>
+  execute: (input: Record<string, unknown>, ctx?: ToolCtx) =>
     softFail(async () => {
-      requireToken();
+      const orgId = orgOf(ctx);
+      await requireToken(orgId);
       const { owner, repo } = ownerRepo(input);
       const title = str(input.title);
       const head = str(input.head);
@@ -263,13 +299,17 @@ export const githubCreatePullRequestTool = {
       if (!head) throw new Error('head (source branch) is required');
       let base = str(input.base);
       if (!base) {
-        const repoData = await githubApi(`/repos/${owner}/${repo}`);
+        const repoData = await githubApi(`/repos/${owner}/${repo}`, {}, orgId);
         base = String(repoData?.default_branch ?? 'main');
       }
-      const data = await githubApi(`/repos/${owner}/${repo}/pulls`, {
-        method: 'POST',
-        body: { title, head, base, ...(str(input.body) ? { body: str(input.body) } : {}) },
-      });
+      const data = await githubApi(
+        `/repos/${owner}/${repo}/pulls`,
+        {
+          method: 'POST',
+          body: { title, head, base, ...(str(input.body) ? { body: str(input.body) } : {}) },
+        },
+        orgId,
+      );
       return { action: 'created_pull_request', number: data.number, title: data.title, state: data.state, base, head, url: data.html_url };
     }),
 };

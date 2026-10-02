@@ -9,6 +9,7 @@ import { sendVerificationEmail, sendWorkspaceInvitationEmail } from '../services
 import { logger } from '../lib/logger';
 import { acceptInvitationSchema, inviteMemberSchema } from '../validation';
 import { assertEntitled, assertQuota, resolveBilling } from '../lib/entitlements';
+import { emitWebhookEvent } from '@ryuksaidso/agent-tools';
 import { REFRESH_COOKIE, switchSessionOrganization, setSessionCookies } from '../lib/auth';
 
 export const accountRouter = Router();
@@ -263,6 +264,7 @@ accountRouter.post('/workspace/invitations', async (req, res, next) => {
     try { await sendWorkspaceInvitationEmail(email, org?.name || 'Workspace', body.role, inviteUrl); }
     catch (error) { emailSent=false; if ((process.env.NODE_ENV || 'development') === 'production') console.error('[RYUKSAIDSO] Invitation email failed:', error); else console.log(`[RYUKSAIDSO] Invitation URL for ${email}: ${inviteUrl}`); }
     await audit(u,'workspace.invited','invitation',invitation.id,{email,role:body.role,emailSent});
+    void emitWebhookEvent(prisma, u.organizationId, 'member.invited', { email, role: body.role }).catch(() => undefined);
     res.status(201).json({
       id: invitation.id,
       email,

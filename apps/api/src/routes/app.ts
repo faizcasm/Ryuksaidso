@@ -7,7 +7,7 @@ import { requireAuth, type AuthenticatedRequest } from '../middleware';
 import { createDocumentSchema, createTicketSchema, updateAgentSchema } from '../validation';
 import { tools } from '../services/tools';
 import { assertQuota, monthStart } from '../lib/entitlements';
-import { loadMcpTools, mcpConfigured } from '@ryuksaidso/agent-tools';
+import { loadMcpTools, mcpConfigured, emitWebhookEvent } from '@ryuksaidso/agent-tools';
 
 export const appRouter = Router();
 appRouter.use(requireAuth);
@@ -43,6 +43,7 @@ appRouter.post('/tickets', async (req, res) => {
     }
   });
   await audit(u, 'ticket.created', 'ticket', ticket.id);
+  void emitWebhookEvent(prisma, u.organizationId, 'ticket.created', { ticketId: ticket.id, title: ticket.title }).catch(() => undefined);
   res.status(201).json(ticket);
 });
 
@@ -95,6 +96,7 @@ appRouter.post('/documents', async (req, res) => {
     return res.status(404).json({ error:'NotFound', message:'Agent not found' });
   }
   const document = await prisma.document.create({ data: { organizationId: u.organizationId, title: body.title, source: body.source, content: body.content, agentId: body.agentId ?? null, metadata: body.metadata as Prisma.InputJsonValue } });
+  void emitWebhookEvent(prisma, u.organizationId, 'document.created', { documentId: document.id, title: document.title, source: document.source }).catch(() => undefined);
   res.status(201).json(document);
 });
 

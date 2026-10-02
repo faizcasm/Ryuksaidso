@@ -137,7 +137,7 @@ curl -X POST https://ryuksaidso.faizcasm.me/api/auth/login \
 
 ## Environment variables
 
-`.env.example` is the complete template for local development (application URLs, Postgres, Redis, API/CORS, JWT/session TTLs, LLM providers, OAuth, agent tools, SMTP/IMAP and file sandbox, worker, observability, feature flags); every value is self-describing or a clearly-marked placeholder. `.env.production.example` is the server-side template used by `docker-compose.prod.yml` on the instance (copy it to `/opt/ryuksaidso/.env`, which is the name compose reads).
+`.env.example` is the complete template for local development (application URLs, Postgres, Redis, API/CORS, JWT/session TTLs, LLM providers, OAuth, agent tools, SMTP/IMAP and file sandbox, worker, observability, integration OAuth clients, feature flags); every value is self-describing or a clearly-marked placeholder. `.env.production.example` is the server-side template used by `docker-compose.prod.yml` on the instance (copy it to `/opt/ryuksaidso/.env`, which is the name compose reads).
 
 Key variables:
 
@@ -161,7 +161,7 @@ The workspace default provider/model is selected per organization in **Settings 
 ```bash
 pnpm lint         # ESLint flat config (eslint.config.mjs), no-unused-vars etc.
 pnpm typecheck    # tsc --noEmit across api/web/worker/packages
-pnpm test         # vitest — 212 tests in apps/api/src/__tests__
+pnpm test         # vitest — 278 tests in apps/api/src/__tests__
 pnpm build        # prisma generate + tsc for api/worker/packages, next build for web
 pnpm db:generate  # prisma client
 pnpm db:migrate   # apply Prisma migrations
@@ -171,7 +171,7 @@ Project convention: **source files must not contain comments** — no `//`, no `
 
 ## Testing summary
 
-- 14 vitest files, **212 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, tool governance (system-admin-only gating, SQL/file-system guards, secret redaction, approval flags, search filters), system users overview builder, evaluator, regressions, billing (Cashfree signature verification, webhook idempotency, entitlements/quotas, plan-change settling) and HTTP server routes.
+- 15 vitest files, **278 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, tool governance (system-admin-only gating, SQL/file-system guards, secret redaction, approval flags, search filters), system users overview builder, evaluator, regressions, billing (Cashfree signature verification, webhook idempotency, entitlements/quotas, plan-change settling), integrations (credential crypto, OAuth exchange, webhook signing/delivery, knowledge sync, widget routes, marketplace/admin guards) and HTTP server routes.
 - Tests are hermetic (mocked Prisma/Redis) and run in CI after `pnpm db:generate`.
 - The worker/agent-runtime packages have no standalone unit tests; their behaviour is exercised through the API harness and the running stack.
 

@@ -65,7 +65,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 const CSRF_EXEMPT = new Set(['/auth/login','/auth/register','/auth/refresh','/auth/forgot-password','/auth/reset-password','/auth/verify-email','/billing/webhook']);
 export function csrfProtection(req: Request, res: Response, next: NextFunction) {
   const bearer = req.header('authorization')?.replace(/^Bearer\s+/i, '');
-  if (['GET','HEAD','OPTIONS'].includes(req.method) || CSRF_EXEMPT.has(req.path) || req.path.startsWith('/auth/oauth/') || bearer?.startsWith('rsk_')) return next();
+  if (['GET','HEAD','OPTIONS'].includes(req.method) || CSRF_EXEMPT.has(req.path) || req.path.startsWith('/auth/oauth/') || req.path.startsWith('/widget/') || bearer?.startsWith('rsk_')) return next();
   const cookieToken = cookie(req, CSRF_COOKIE);
   const headerToken = req.header('x-csrf-token');
   if (!cookieToken || !headerToken || cookieToken !== headerToken) return res.status(403).json({ error: 'Forbidden', message: 'CSRF validation failed' });
