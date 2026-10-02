@@ -201,7 +201,15 @@ export const modelProviderCreateSchema = z.object({
   enabled: z.boolean().default(true)
 });
 
-export const modelProviderUpdateSchema = modelProviderCreateSchema.partial();
+export const modelProviderUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(60).optional(),
+  kind: z.enum(['openai_compat', 'ollama']).optional(),
+  baseUrl: z.string().trim().min(1).max(300).optional(),
+  apiKey: z.string().trim().max(400).optional(),
+  defaultModel: z.string().trim().max(200).optional(),
+  models: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+  enabled: z.boolean().optional()
+});
 
 export const modelProviderDiscoverSchema = z.object({
   kind: z.enum(['openai_compat', 'ollama']).default('openai_compat'),

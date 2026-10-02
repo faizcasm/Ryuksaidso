@@ -125,6 +125,9 @@ export class OpenAICompatibleProvider implements LLMProvider {
         const data = await response.json() as ModelPayload;
         const models = (data.data ?? []).map(x => x.id).filter((x): x is string => Boolean(x));
         if (models.length) return models;
+        lastReason = 'the endpoint returned no models';
+      } else {
+        lastReason = `HTTP ${response.status}`;
       }
     } catch (error) {
       lastReason = error instanceof Error ? error.message : String(error);

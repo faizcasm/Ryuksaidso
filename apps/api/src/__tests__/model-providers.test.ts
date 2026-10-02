@@ -277,6 +277,12 @@ describe('PUT /api/models/providers/:id', () => {
     const data = vi.mocked(prisma.modelProvider.update).mock.calls[0][0].data as Record<string, unknown>;
     expect(String(data.apiKey)).not.toBe('sk-rotated');
     expect(decryptSecret(String(data.apiKey))).toBe('sk-rotated');
+    expect('defaultModel' in data).toBe(false);
+    expect('kind' in data).toBe(false);
+    expect('models' in data).toBe(false);
+    expect('enabled' in data).toBe(false);
+    expect('name' in data).toBe(false);
+    expect('baseUrl' in data).toBe(false);
   });
 
   it('scopes lookups to the workspace and answers 404 for unknown providers', async () => {
