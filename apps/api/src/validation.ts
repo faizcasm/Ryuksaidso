@@ -216,3 +216,7 @@ export const modelProviderDiscoverSchema = z.object({
   baseUrl: z.string().trim().min(1).max(300),
   apiKey: z.string().trim().max(400).optional()
 });
+
+export const supportMessageSchema = z.object({
+  message: z.string().trim().min(10).max(4000)
+});

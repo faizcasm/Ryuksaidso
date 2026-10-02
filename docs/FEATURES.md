@@ -134,6 +134,13 @@
 - Admin controls: platform-wide enable switch and per-provider kill switches, platform overview, cross-workspace integration logs
 - Master switch semantics: disabling integrations blocks connects, agent tools and syncs; org webhook endpoints and the chat widget keep working
 
+## Customer support
+
+- Direct-to-CEO channel: a headset icon in the top bar (with a live green indicator) opens a polished modal — CEO identity card with verified badge, "Send your message to CEO…" textarea, live character counter, min-length hint and a delivery confirmation state
+- Messages persist with the sender's workspace context (`SupportMessage`), are audit-logged (`support.message_sent`) and are throttled with a 15-second per-user Redis cooldown that fails open
+- **CEO inbox** panel on the Admin dashboard: newest-first list, unread badge on the panel header, per-message mark-as-read
+- Inbox routes are system-admin only (`requireAdmin`, API keys rejected); sending needs a session and passes CSRF
+
 ## Observability
 
 - Prometheus metrics

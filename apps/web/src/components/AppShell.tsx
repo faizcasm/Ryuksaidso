@@ -8,6 +8,7 @@ import {
   useState,
   type ComponentType,
   type FormEvent,
+  type ReactNode,
 } from "react";
 import {
   Activity,
@@ -24,6 +25,7 @@ import {
   FileClock,
   Gauge,
   Globe2,
+  Headset,
   KeyRound,
   Layers3,
   LifeBuoy,
@@ -60,6 +62,11 @@ import icon from "../app/icon.png";
 import { api, API } from "../lib/api";
 import { isAdmin as isAdminRole } from "../lib/roles";
 import { BillingAdminSection, BillingSection, EvalLockBanner } from "./Billing";
+import {
+  CeoSupportModal,
+  SupportInboxList,
+  type SupportInbox,
+} from "./CeoSupport";
 import { IntegrationsView } from "./Integrations";
 import { ModelProvidersSection } from "./ModelProviders";
 
@@ -524,6 +531,8 @@ export default function AppShell() {
   const [members, setMembers] = useState<AdminOverview["members"]>([]);
   const [adminData, setAdminData] = useState<AdminOverview | null>(null);
   const [adminUsers, setAdminUsers] = useState<SystemUsersOverview | null>(null);
+  const [supportInbox, setSupportInbox] = useState<SupportInbox | null>(null);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [invites, setInvites] = useState<WorkspaceInvite[]>([]);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -646,15 +655,36 @@ export default function AppShell() {
   }
   async function loadAdmin() {
     try {
-      const [data, users] = await Promise.all([
+      const [data, users, inbox] = await Promise.all([
         api<AdminOverview>("/admin/overview"),
         api<SystemUsersOverview>("/admin/users/overview").catch(() => null),
+        api<SupportInbox>("/admin/support").catch(() => null),
       ]);
       setAdminData(data);
       setAdminUsers(users);
+      setSupportInbox(inbox);
       setAdminUpdatedAt(data.generatedAt || new Date().toISOString());
     } catch (e) {
       setError(readError(e, "Could not load admin dashboard"));
+    }
+  }
+  async function markSupportRead(id: string) {
+    try {
+      await api(`/admin/support/${id}/read`, { method: "PATCH" });
+      setSupportInbox((current) =>
+        current
+          ? {
+              unread: Math.max(0, current.unread - 1),
+              messages: current.messages.map((m) =>
+                m.id === id
+                  ? { ...m, status: "READ", readAt: new Date().toISOString() }
+                  : m,
+              ),
+            }
+          : current,
+      );
+    } catch (e) {
+      setError(readError(e, "Could not update the support message"));
     }
   }
   async function loadProfile() {
@@ -1446,6 +1476,14 @@ export default function AppShell() {
               <span className="pulse" /> workers online
             </span>
             <button
+              className="ghost-icon support-btn"
+              onClick={() => setSupportOpen(true)}
+              title="Customer support — message the CEO"
+              aria-label="Customer support — message the CEO"
+            >
+              <Headset size={15} />
+            </button>
+            <button
               className="ghost-icon"
               onClick={() =>
                 setTheme(
@@ -1476,6 +1514,12 @@ export default function AppShell() {
             </button>
           </div>
         </header>
+        {supportOpen && (
+          <CeoSupportModal
+            email={profile?.email ?? user.email}
+            onClose={() => setSupportOpen(false)}
+          />
+        )}
         <div className="content">
           {toastNode}
           {tab === "Command Center" && (
@@ -1687,6 +1731,7 @@ export default function AppShell() {
             <AdminView
               data={adminData}
               users={adminUsers}
+              support={supportInbox}
               viewerRole={user.role}
               viewerSystemRole={user.userRole ?? "USER"}
               providerState={providerState}
@@ -1695,6 +1740,7 @@ export default function AppShell() {
               onRemove={removeMember}
               onRevokeSessions={revokeMemberSessions}
               onInspect={inspectRun}
+              onReadMessage={markSupportRead}
               updatedAt={adminUpdatedAt}
             />
           )}
@@ -4513,6 +4559,7 @@ function SettingsView({
 function AdminView({
   data,
   users,
+  support,
   viewerRole,
   viewerSystemRole,
   providerState,
@@ -4521,10 +4568,12 @@ function AdminView({
   onRemove,
   onRevokeSessions,
   onInspect,
+  onReadMessage,
   updatedAt,
 }: {
   data: AdminOverview | null;
   users: SystemUsersOverview | null;
+  support: SupportInbox | null;
   viewerRole: string;
   viewerSystemRole: string;
   providerState: ProviderState | null;
@@ -4533,6 +4582,7 @@ function AdminView({
   onRemove: (id: string) => void;
   onRevokeSessions: (id: string) => void;
   onInspect: (id: string) => void;
+  onReadMessage: (id: string) => void;
   updatedAt?: string | null;
 }) {
   const [refreshing, setRefreshing] = useState(false);
@@ -5019,6 +5069,17 @@ function AdminView({
           </div>
         </section>
       </div>
+      <section className="panel">
+        <PanelHeader
+          icon={Headset}
+          title="CEO inbox"
+          sub="Direct customer support messages from the top bar"
+          badge={
+            support && support.unread > 0 ? `${support.unread} unread` : null
+          }
+        />
+        <SupportInboxList inbox={support} onRead={onReadMessage} />
+      </section>
       <section className="panel">
         <PanelHeader
           icon={FileClock}
@@ -5798,10 +5859,12 @@ function PanelHeader({
   icon: Icon,
   title,
   sub,
+  badge,
 }: {
   icon: IconType;
   title: string;
   sub: string;
+  badge?: ReactNode;
 }) {
   return (
     <div className="panel-header">
@@ -5812,6 +5875,7 @@ function PanelHeader({
         <h2>{title}</h2>
         <p>{sub}</p>
       </div>
+      {badge ? <span className="panel-badge">{badge}</span> : null}
     </div>
   );
 }

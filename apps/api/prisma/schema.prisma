@@ -767,3 +767,16 @@ model ModelProvider {
   updatedAt DateTime @updatedAt
   @@index([organizationId])
 }
+
+model SupportMessage {
+  id String @id @default(cuid())
+  organizationId String
+  userId String
+  userName String
+  userEmail String
+  message String
+  status String @default("OPEN")
+  readAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}

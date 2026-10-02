@@ -279,6 +279,16 @@ Each route sets its own CORS headers (origin reflected, `Cross-Origin-Resource-P
 
 Workspace routing: `PATCH /llm` accepts a custom provider id — it probes the endpoint, verifies the model, stores it as the provider's `defaultModel` and sets `Organization.llmProvider` to the id. Runs (playground, tickets, widget) store that id on `AgentRun.provider`; the worker calls the custom endpoint first and automatically falls back to the workspace OmniRoute/Ollama built-ins on connection-level failures. The worker also sweeps every enabled provider every 15 minutes (`GET {base}/models`) to keep `status`/`latencyMs` fresh, and admin health reports probe the active custom provider instead of the built-ins.
 
+## Customer support — `/api/support`
+
+A direct line to the CEO from the app's top bar. Any signed-in member may send; messages are stored with the sender's workspace context, audited as `support.message_sent` and throttled per user with a 15-second cooldown (Redis `NX`, fails open if Redis is unreachable).
+
+- `POST /api/support` — `{ message }` (trimmed, 10–4000 chars) → `201 { id, status, createdAt }`. `400` validation, `429 RateLimitExceeded` inside the cooldown window.
+- `GET /api/admin/support` — system admin → `{ messages[100], unread }` newest-first (`id`, `organizationId`, `userId`, `userName`, `userEmail`, `message`, `status` `OPEN|READ`, `readAt`, `createdAt`).
+- `PATCH /api/admin/support/:id/read` — system admin → `200` updated message; `404` unknown id. Both admin routes use `requireAdmin` (API keys rejected, `403` for regular users).
+
+The admin inbox renders in the Admin dashboard as the **CEO inbox** panel with an unread badge and per-message mark-as-read.
+
 ## Documentation endpoints — `/api` (public, no auth)
 
 Static JSON used by the in-app docs/architecture pages:
