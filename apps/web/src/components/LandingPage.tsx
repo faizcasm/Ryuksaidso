@@ -990,6 +990,7 @@ export default function LandingPage() {
           <Link href="/architecture">Architecture</Link>
           <Link href="/playground">Playground</Link>
           <Link href="/pricing">Pricing</Link>
+          <Link href="/faq">FAQ</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/auth">Sign in</Link>
         </nav>
