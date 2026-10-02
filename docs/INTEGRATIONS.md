@@ -41,7 +41,7 @@ Platform administrators get a master switch and per-provider kill switches (Admi
 | Shopify | OAuth2 (store-domain templated) | products/orders | — | `SHOPIFY_CLIENT_ID/SECRET` |
 | Zapier / Make / n8n | webhook preset | — (creates an endpoint) | — | — |
 
-Every OAuth provider additionally needs its redirect URI registered: `<API origin>/api/integrations/<provider>/callback` (set `API_PUBLIC_URL` to pin the origin).
+Every OAuth provider additionally needs its redirect URI registered: `<API origin>/api/integrations/<provider>/callback` (set `API_PUBLIC_URL` to pin the origin). Until it is registered the provider rejects the consent redirect with `400 redirect_uri_mismatch` — each marketplace card prints the exact callback URL with a copy button so you can paste it into the provider console first.
 
 ## OAuth connect flow
 

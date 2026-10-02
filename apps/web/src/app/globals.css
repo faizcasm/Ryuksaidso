@@ -610,3 +610,7 @@ html[data-theme='light'] .obs-rid{color:#0369a1}
   .int-cols-source,.int-cols-hook,.int-cols-delivery,.int-cols-tool,.int-cols-log,.int-cols-error{grid-template-columns:repeat(2,minmax(0,1fr))}
   .int-table>div.head{display:none}
 }
+.int-callback{border:1px dashed var(--line);border-radius:8px;padding:7px 9px}
+.int-callback span{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:5px}
+.int-callback-row{display:flex;gap:6px;align-items:center}
+.int-callback-row code{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:8.5px;color:#a8b5c7;word-break:break-all;line-height:1.45}

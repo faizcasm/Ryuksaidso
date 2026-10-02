@@ -92,6 +92,7 @@ integrationsRouter.get('/catalog', async (req, res, next) => {
           envKeys: provider.envKeys,
           configured: providerConfigured(provider),
           setupHint: providerConfigHint(provider),
+          redirectUri: provider.authType === 'oauth2' ? `${apiBase(req)}/api/integrations/${provider.key}/callback` : null,
           tokenFields: (provider.tokenFields ?? []).map((field) => ({ key: field.key, label: field.label, placeholder: field.placeholder ?? '', secret: Boolean(field.secret) })),
           disabled: !setting.enabled || setting.disabledProviders.includes(provider.key),
           connected: Boolean(connection),

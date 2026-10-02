@@ -698,6 +698,9 @@ describe('integrations routes', () => {
     const gmail = response.body.providers.find((p: any) => p.key === 'gmail');
     expect(gmail.connected).toBe(false);
     expect(gmail.configured).toBe(false);
+    expect(gmail.redirectUri).toContain('/api/integrations/gmail/callback');
+    expect(response.body.providers.find((p: any) => p.key === 'teams').redirectUri).toBeNull();
+    expect(response.body.providers.find((p: any) => p.key === 'zapier').redirectUri).toBeNull();
   });
 
   it('forbids non-owners from starting OAuth connect', async () => {

@@ -136,6 +136,7 @@ type CatalogProvider = {
   envKeys: string[];
   configured: boolean;
   setupHint: string;
+  redirectUri: string | null;
   tokenFields: TokenField[];
   disabled: boolean;
   connected: boolean;
@@ -763,6 +764,21 @@ export function IntegrationsView({
                 {provider.authType === "oauth2" && !provider.configured && (
                   <div className="int-hint">
                     {provider.setupHint || `Server env required: ${provider.envKeys.join(", ")}`}
+                  </div>
+                )}
+                {provider.authType === "oauth2" && provider.redirectUri && !connection && (
+                  <div className="int-callback">
+                    <span>Callback URL to register in {provider.name}&apos;s console</span>
+                    <div className="int-callback-row">
+                      <code>{provider.redirectUri}</code>
+                      <button
+                        className="ghost"
+                        onClick={() => void copyText(`cb:${provider.key}`, provider.redirectUri ?? "")}
+                        title="Copy callback URL"
+                      >
+                        {copied === `cb:${provider.key}` ? "Copied" : <Copy size={12} />}
+                      </button>
+                    </div>
                   </div>
                 )}
                 <div className="int-card-foot">
