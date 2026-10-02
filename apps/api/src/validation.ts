@@ -42,7 +42,7 @@ export const createProjectSchema = z.object({ name:z.string().trim().min(2).max(
 export const updateProjectSchema = z.object({ name:z.string().trim().min(2).max(120).optional(), description:z.string().trim().min(10).max(1000).optional(), status:z.enum(['ACTIVE','PAUSED','ARCHIVED']).optional(), productionVersion:z.string().max(80).nullable().optional() }).refine(v=>Object.keys(v).length>0);
 export const createAgentSchema = z.object({ projectId:z.string().cuid().optional(), name:z.string().trim().min(2).max(120), slug:z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80), instructions:z.string().trim().min(10).max(20_000), systemPrompt:z.string().trim().max(30_000).optional(), tools:z.array(z.string().trim().min(1).max(120)).max(50).default(['search_knowledge']) });
 export const createVersionSchema = z.object({ changelog:z.string().trim().max(1000).optional(), config:z.record(z.string(),z.unknown()).optional(), publish:z.boolean().default(false) });
-export const createRunSchema = z.object({ provider:z.enum(['OLLAMA','OMNIROUTE']).optional(), projectId:z.preprocess(v=>v===''?undefined:v, z.string().cuid().optional()), agentId:z.string().cuid(), prompt:z.string().trim().min(1).max(100_000), environment:z.string().trim().min(1).max(50).default('development'), trigger:z.string().trim().min(1).max(80).default('playground'), metadata:z.record(z.string(),z.unknown()).optional() });
+export const createRunSchema = z.object({ provider:z.string().trim().regex(/^(OLLAMA|OMNIROUTE)$|^c[a-z0-9]{20,40}$/, 'Invalid provider').optional(), projectId:z.preprocess(v=>v===''?undefined:v, z.string().cuid().optional()), agentId:z.string().cuid(), prompt:z.string().trim().min(1).max(100_000), environment:z.string().trim().min(1).max(50).default('development'), trigger:z.string().trim().min(1).max(80).default('playground'), metadata:z.record(z.string(),z.unknown()).optional() });
 export const createPolicySchema = z.object({ name:z.string().trim().min(2).max(120), description:z.string().trim().min(5).max(500), action:z.string().trim().min(2).max(120), enabled:z.boolean().default(true), requiresApproval:z.boolean().default(false), severity:z.enum(['low','medium','high','critical']).default('medium'), conditions:z.record(z.string(),z.unknown()).optional() });
 export const updatePolicySchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
@@ -189,4 +189,22 @@ export const widgetMessageSchema = z.object({
   content: z.string().trim().min(1).max(4000),
   email: z.string().trim().email().max(320).optional(),
   visitorId: z.string().trim().max(80).optional()
+});
+
+export const modelProviderCreateSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  kind: z.enum(['openai_compat', 'ollama']).default('openai_compat'),
+  baseUrl: z.string().trim().min(1).max(300),
+  apiKey: z.string().trim().max(400).optional(),
+  defaultModel: z.string().trim().max(200).default(''),
+  models: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
+  enabled: z.boolean().default(true)
+});
+
+export const modelProviderUpdateSchema = modelProviderCreateSchema.partial();
+
+export const modelProviderDiscoverSchema = z.object({
+  kind: z.enum(['openai_compat', 'ollama']).default('openai_compat'),
+  baseUrl: z.string().trim().min(1).max(300),
+  apiKey: z.string().trim().max(400).optional()
 });

@@ -3,6 +3,7 @@ import { audit, resolveSystemRole, type AuthUser } from '../lib/auth';
 import { prisma } from '../lib/db';
 import type { Prisma } from '@prisma/client';
 import { enqueueRun } from '../services/queue';
+import { resolveRunProvider } from '../services/modelProviders';
 import { requireAuth, type AuthenticatedRequest } from '../middleware';
 import { createDocumentSchema, createTicketSchema, updateAgentSchema } from '../validation';
 import { tools } from '../services/tools';
@@ -60,12 +61,14 @@ appRouter.post('/tickets/:id/run', async (req, res) => {
     prisma.organization.findUnique({ where: { id: u.organizationId }, select: { llmProvider: true, ollamaModel: true, omnirouteModel: true } })
   ]);
   if (!agent) return res.status(409).json({ error: 'Conflict', message: 'Resolution agent is not configured' });
-  const provider = organization?.llmProvider === 'OMNIROUTE' ? 'OMNIROUTE' as const : 'OLLAMA' as const;
-  const envModel = provider === 'OMNIROUTE' ? process.env.OMNIROUTE_MODEL : process.env.OLLAMA_MODEL;
-  const model = (provider === 'OMNIROUTE' ? organization?.omnirouteModel : organization?.ollamaModel) || envModel || '';
-  if (!model) {
-    return res.status(409).json({ error: 'ProviderNotConfigured', message: `${provider} has no model configured for this workspace. Configure it in Settings before running an agent.` });
+  const resolved = await resolveRunProvider(u.organizationId, organization, undefined, process.env);
+  if (!resolved.ok) {
+    const message = resolved.reason === 'unknown_provider'
+      ? 'The selected model provider is no longer available. Configure a provider in Settings before running an agent.'
+      : `${resolved.provider} has no model configured for this workspace. Configure it in Settings before running an agent.`;
+    return res.status(409).json({ error: 'ProviderNotConfigured', message });
   }
+  const provider = resolved.provider;
   const currentRuns = await prisma.agentRun.count({ where: { organizationId: u.organizationId, createdAt: { gte: monthStart() } } });
   await assertQuota(u.organizationId, 'runs', currentRuns);
   const run = await prisma.agentRun.create({ data: { organizationId: u.organizationId, projectId: agent.projectId, ticketId: ticket.id, agentId: agent.id, agentVersionId: agent.versions[0]?.id, provider, status: 'QUEUED', trigger: 'ticket', environment: 'production', input: { prompt: `${ticket.title}

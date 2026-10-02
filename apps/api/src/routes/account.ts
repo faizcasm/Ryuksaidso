@@ -4,7 +4,8 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/db';
 import { audit, hashPassword, type AuthUser } from '../lib/auth';
 import { requireAuth, type AuthenticatedRequest } from '../middleware';
-import { getLLMProvider, isModelAvailable } from '../services/llm';
+import { getLLMProvider, isModelAvailable, getCustomLLMProvider } from '../services/llm';
+import { decryptModelKey, parseModelList } from '../services/modelProviders';
 import { sendVerificationEmail, sendWorkspaceInvitationEmail } from '../services/email';
 import { logger } from '../lib/logger';
 import { acceptInvitationSchema, inviteMemberSchema } from '../validation';
@@ -110,17 +111,28 @@ accountRouter.post('/profile/password', async (req, res, next) => {
 accountRouter.get('/llm/providers', async (req, res) => {
   const u = user(req as AuthenticatedRequest);
   const organization = await prisma.organization.findUnique({ where: { id:u.organizationId }, select: { llmProvider:true, ollamaModel:true, omnirouteModel:true } });
-  const results = await Promise.all((['OMNIROUTE','OLLAMA'] as const).map(async provider => {
+  const builtIns = await Promise.all((['OMNIROUTE','OLLAMA'] as const).map(async provider => {
     const model = provider === 'OLLAMA' ? organization?.ollamaModel : organization?.omnirouteModel;
     try {
       const models = await getLLMProvider(provider, model || undefined).models();
       const selectedModel = model && isModelAvailable(models, model) ? model : (models[0] || model || '');
-      return { provider, configured: true, models, selectedModel };
+      return { provider, name: provider === 'OMNIROUTE' ? 'OmniRoute' : 'Ollama', kind: 'built_in', custom: false, baseUrl: '', configured: true, models, selectedModel };
     } catch (error) {
-      return { provider, configured: false, models: [], selectedModel: model || '', error: error instanceof Error ? error.message : String(error) };
+      return { provider, name: provider === 'OMNIROUTE' ? 'OmniRoute' : 'Ollama', kind: 'built_in', custom: false, baseUrl: '', configured: false, models: [], selectedModel: model || '', error: error instanceof Error ? error.message : String(error) };
     }
   }));
-  res.json({ current: organization?.llmProvider || 'OMNIROUTE', providers: results });
+  const customRows = await prisma.modelProvider.findMany({ where: { organizationId: u.organizationId, enabled: true }, orderBy: { createdAt: 'asc' } });
+  const custom = await Promise.all(customRows.map(async row => {
+    const stored = parseModelList(row.models);
+    try {
+      const models = await getCustomLLMProvider(row, undefined, decryptModelKey(row.apiKey)).models();
+      const selectedModel = row.defaultModel && isModelAvailable(models, row.defaultModel) ? row.defaultModel : (models[0] || row.defaultModel || '');
+      return { provider: row.id, name: row.name, kind: row.kind, custom: true, baseUrl: row.baseUrl, configured: true, models, selectedModel, status: row.status, latencyMs: row.latencyMs };
+    } catch (error) {
+      return { provider: row.id, name: row.name, kind: row.kind, custom: true, baseUrl: row.baseUrl, configured: false, models: stored, selectedModel: row.defaultModel || stored[0] || '', status: row.status, latencyMs: row.latencyMs, error: error instanceof Error ? error.message : String(error) };
+    }
+  }));
+  res.json({ current: organization?.llmProvider || 'OMNIROUTE', providers: [...builtIns, ...custom] });
 });
 
 accountRouter.get('/llm', async (req, res) => {
@@ -135,7 +147,24 @@ accountRouter.patch('/llm', async (req, res, next) => {
     const u = user(req as AuthenticatedRequest); requireRole(u, ['OWNER','ADMIN']);
     const provider = String(req.body?.provider || '');
     const model = typeof req.body?.model === 'string' ? req.body.model.trim().slice(0,200) : '';
-    if (!['OLLAMA','OMNIROUTE'].includes(provider)) return res.status(400).json({ error:'ValidationError', message:'Provider must be OLLAMA or OMNIROUTE' });
+    if (!['OLLAMA','OMNIROUTE'].includes(provider)) {
+      const row = await prisma.modelProvider.findFirst({ where: { id: provider, organizationId: u.organizationId, enabled: true } });
+      if (!row) return res.status(400).json({ error:'ValidationError', message:'Provider must be OLLAMA, OMNIROUTE, or a custom provider in this workspace' });
+      if (!model) return res.status(400).json({ error:'ValidationError', message:'A model is required' });
+      try {
+        const discovered = await getCustomLLMProvider(row, model, decryptModelKey(row.apiKey)).models();
+        if (discovered.length && !isModelAvailable(discovered, model)) {
+          return res.status(400).json({ error:'ModelUnavailable', message:`${row.name} is reachable, but model "${model}" is not available. Choose a discovered model or configure it on the endpoint first.` });
+        }
+      } catch {
+        return res.status(503).json({ error:'ProviderUnavailable', message:`Could not reach ${row.name}. Check its endpoint URL, API key, and model service before saving this provider.` });
+      }
+      if (row.defaultModel !== model) await prisma.modelProvider.update({ where: { id: row.id }, data: { defaultModel: model } });
+      const organization = await prisma.organization.update({ where:{id:u.organizationId}, data:{ llmProvider: provider }, select:{llmProvider:true,ollamaModel:true,omnirouteModel:true} });
+      await audit(u,'llm.preference_changed','organization',u.organizationId,{provider,model});
+      res.json(organization);
+      return;
+    }
     if (!model) return res.status(400).json({ error:'ValidationError', message:'A model is required' });
     try {
       const discovered = await getLLMProvider(provider as 'OLLAMA' | 'OMNIROUTE', model).models();
@@ -145,7 +174,7 @@ accountRouter.patch('/llm', async (req, res, next) => {
     } catch {
       return res.status(503).json({ error:'ProviderUnavailable', message:`Could not reach ${provider}. Check its URL, API key, and model service before saving this provider.` });
     }
-    const data = provider === 'OLLAMA' ? { llmProvider: provider as any, ollamaModel: model } : { llmProvider: provider as any, omnirouteModel: model };
+    const data = provider === 'OLLAMA' ? { llmProvider: provider, ollamaModel: model } : { llmProvider: provider, omnirouteModel: model };
     const organization = await prisma.organization.update({ where:{id:u.organizationId}, data, select:{llmProvider:true,ollamaModel:true,omnirouteModel:true} });
     await audit(u,'llm.preference_changed','organization',u.organizationId,{provider,model});
     res.json(organization);

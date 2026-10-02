@@ -61,6 +61,7 @@ import { api, API } from "../lib/api";
 import { isAdmin as isAdminRole } from "../lib/roles";
 import { BillingAdminSection, BillingSection, EvalLockBanner } from "./Billing";
 import { IntegrationsView } from "./Integrations";
+import { ModelProvidersSection } from "./ModelProviders";
 
 type User = {
   id: string;
@@ -233,12 +234,18 @@ type Dashboard = {
   } | null;
 };
 type ProviderState = {
-  current: "OLLAMA" | "OMNIROUTE";
+  current: string;
   providers: {
-    provider: "OLLAMA" | "OMNIROUTE";
+    provider: string;
+    name?: string;
+    kind?: string;
+    custom?: boolean;
+    baseUrl?: string;
     configured: boolean;
     models: string[];
     selectedModel: string;
+    status?: string;
+    latencyMs?: number | null;
     error?: string;
   }[];
 };
@@ -1654,6 +1661,7 @@ export default function AppShell() {
               model={providerModel}
               setModel={setProviderModel}
               onProvider={saveProvider}
+              onProviderChanged={loadProviderState}
               members={members}
               canManageMembers={canManageWorkspace}
               onRole={changeRole}
@@ -2313,7 +2321,7 @@ function RunLab({
           <PanelHeader
             icon={Play}
             title="Execution request"
-            sub="Ollama and OmniRoute use the same OpenAI-compatible contract."
+            sub="OmniRoute, Ollama and your own providers share one OpenAI-compatible contract."
           />
           <div className="provider-pills">
             <button
@@ -2360,6 +2368,21 @@ function RunLab({
                   : "unconfigured"}
               </small>
             </button>
+            {providerState?.providers
+              .filter((p) => p.custom)
+              .map((p) => (
+                <button
+                  key={p.provider}
+                  type="button"
+                  className={form.provider === p.provider ? "active" : ""}
+                  onClick={() => setForm({ ...form, provider: p.provider })}
+                >
+                  <b>{p.name}</b>
+                  <small className={p.configured ? "good-text" : "bad-text"}>
+                    {p.configured ? "configured" : "unconfigured"}
+                  </small>
+                </button>
+              ))}
           </div>
           <label>
             Model
@@ -3887,6 +3910,7 @@ function SettingsView({
   model,
   setModel,
   onProvider,
+  onProviderChanged,
   members,
   canManageMembers,
   onRole,
@@ -3924,6 +3948,7 @@ function SettingsView({
   model: string;
   setModel: (x: string) => void;
   onProvider: (e: FormEvent) => void;
+  onProviderChanged: () => void;
   members: AdminOverview["members"];
   canManageMembers: boolean;
   onRole: (id: string, r: string) => void;
@@ -4202,6 +4227,28 @@ function SettingsView({
                   {ollamaInfo?.configured ? "configured" : "unconfigured"}
                 </small>
               </button>
+              {providerState?.providers
+                .filter((p) => p.custom)
+                .map((p) => (
+                  <button
+                    key={p.provider}
+                    type="button"
+                    className={provider === p.provider ? "active" : ""}
+                    onClick={() => {
+                      setProvider(p.provider);
+                      setModel(p.selectedModel || "");
+                    }}
+                  >
+                    <b>{p.name}</b>
+                    <small className={p.configured ? "good-text" : "bad-text"}>
+                      {p.configured
+                        ? p.status === "ERROR"
+                          ? "unreachable"
+                          : "configured"
+                        : "unconfigured"}
+                    </small>
+                  </button>
+                ))}
             </div>
             <label>
               Model
@@ -4239,6 +4286,10 @@ function SettingsView({
             </button>
           </form>
         </section>
+        <ModelProvidersSection
+          canManage={canManageMembers}
+          onChanged={onProviderChanged}
+        />
         <section className="panel">
           <PanelHeader
             icon={Sun}
@@ -4613,7 +4664,12 @@ function AdminView({
         <div className="security-grid">
           <div>
             <span>Active provider</span>
-            <b>{data.organization?.llmProvider || "OMNIROUTE"}</b>
+            <b>
+              {data.organization?.llmProvider &&
+              !["OMNIROUTE", "OLLAMA"].includes(data.organization.llmProvider)
+                ? data.health?.llm.provider || "Custom provider"
+                : data.organization?.llmProvider || "OMNIROUTE"}
+            </b>
           </div>
           <div>
             <span>

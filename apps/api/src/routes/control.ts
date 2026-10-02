@@ -6,6 +6,7 @@ import { agentRuns } from '../lib/metrics';
 import { assertQuota, monthStart } from '../lib/entitlements';
 import { audit, type AuthUser } from '../lib/auth';
 import { enqueueRun } from '../services/queue';
+import { resolveRunProvider } from '../services/modelProviders';
 import {
   createAgentSchema,
   createProjectSchema,
@@ -212,6 +213,7 @@ controlRouter.get('/dashboard', async (req, res) => {
     : 0;
 
   const latestEval = evaluations[0] as any;
+  const resolvedProvider = await resolveRunProvider(u.organizationId, organization, undefined, process.env);
 
   res.json({
     metrics: {
@@ -221,8 +223,8 @@ controlRouter.get('/dashboard', async (req, res) => {
       failed24h: failed,
       pendingApprovals,
       documents,
-      provider: organization?.llmProvider ?? 'OLLAMA',
-      model: organization?.llmProvider === 'OMNIROUTE' ? organization.omnirouteModel : organization?.ollamaModel,
+      provider: resolvedProvider.custom?.name ?? resolvedProvider.provider,
+      model: resolvedProvider.model,
     },
 
     projects,
@@ -851,10 +853,12 @@ controlRouter.post(
         body.projectId ?? agent.projectId;
 
       const organization = await prisma.organization.findUnique({ where: { id: u.organizationId }, select: { llmProvider: true, ollamaModel: true, omnirouteModel: true } });
-      const provider = body.provider ?? organization?.llmProvider ?? 'OLLAMA';
-      const envModel = provider === 'OMNIROUTE' ? process.env.OMNIROUTE_MODEL : process.env.OLLAMA_MODEL;
-      const configuredModel = (provider === 'OMNIROUTE' ? organization?.omnirouteModel : organization?.ollamaModel) || envModel || '';
-      if (!configuredModel) return res.status(409).json({ error:'ProviderNotConfigured', message:`${provider} has no model configured for this workspace. Configure it in Settings.` });
+      const resolved = await resolveRunProvider(u.organizationId, organization, body.provider, process.env);
+      if (!resolved.ok) {
+        if (resolved.reason === 'unknown_provider') return res.status(400).json({ error:'ValidationError', message:'Unknown model provider. Choose a provider from Settings.' });
+        return res.status(409).json({ error:'ProviderNotConfigured', message:`${resolved.provider} has no model configured for this workspace. Configure it in Settings.` });
+      }
+      const provider = resolved.provider;
 
       const version =
         agent.versions[0];

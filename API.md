@@ -138,9 +138,9 @@ All routes require auth. Mutations marked with roles beyond authentication are e
 | PATCH | `/profile` | self; `{ name ≥2, bio?, jobTitle?, avatarUrl?, timezone?, theme?: light\|dark\|system }` | `200` profile; `400` invalid name |
 | POST | `/profile/verify-email` | self; re-issues verification token (30 min) | `200` already verified; `202` sent / `202` delivery failure |
 | POST | `/profile/password` | `{ currentPassword, newPassword ≥12 }`; revokes other sessions, keeps current one | `204`; `400` wrong current password or OAuth-only account |
-| GET | `/llm/providers` | — | `200 { current, providers[] }` with per-provider model discovery |
+| GET | `/llm/providers` | — | `200 { current, providers[] }` — built-in OLLAMA/OMNIROUTE plus custom providers (each entry carries `custom`, `name`, `kind`, `baseUrl`, `status`, `latencyMs`), with per-provider model discovery |
 | GET | `/llm` | — | `200 { llmProvider, ollamaModel, omnirouteModel }` |
-| PATCH | `/llm` | **OWNER/ADMIN**; `{ provider: OLLAMA\|OMNIROUTE, model }`; validates the model exists | `200`; `400 ModelUnavailable`; `503 ProviderUnavailable` |
+| PATCH | `/llm` | **OWNER/ADMIN**; `{ provider: OLLAMA\|OMNIROUTE\|<custom provider id>, model }`; probes the endpoint and validates the model exists (a custom id also stores the model as that provider's `defaultModel`) | `200`; `400 ModelUnavailable`; `503 ProviderUnavailable` |
 | GET | `/organization` | — | `200` org + counts |
 | PATCH | `/organization` | **OWNER/ADMIN**; `{ name }` | `200` org |
 | GET | `/members` | — | `200` memberships with user summaries |
@@ -265,6 +265,19 @@ Each route sets its own CORS headers (origin reflected, `Cross-Origin-Resource-P
 - `GET /admin/integrations/overview` — `{ settings, connections { total, byStatus, byProvider }, sources { total, byStatus }, webhooks { endpoints, delivery24h }, recentErrors[], catalog { providers } }`.
 - `GET /admin/integrations/settings` · `PUT /admin/integrations/settings` — `{ enabled, disabledProviders[] }` — the platform-wide switch plus per-provider kill switches (`400` on unknown provider keys). Audit-logged as `admin.integration_settings_updated`.
 - `GET /admin/integrations/logs?level=&limit=` — newest platform-wide integration log entries with workspace names.
+
+## Model providers — `/api/models`
+
+`requireAuth` for everything. Reads are open to every workspace member; create/update/delete/test/discover require `OWNER|ADMIN`. API keys are stored AES-256-GCM-encrypted (keyed from `JWT_SECRET`) and never returned — summaries expose `hasKey` only. Endpoint URLs must be `http(s)`; cloud metadata addresses (`169.254.*`, `metadata.google.internal`) are rejected while loopback and private addresses stay allowed so models running on your own machines work.
+
+- `GET /models/providers` — `{ current, providers[] }` — each summary: `id`, `name`, `kind` (`openai_compat`|`ollama`), `baseUrl`, `hasKey`, `defaultModel`, `models[]`, `enabled`, `status` (`UNKNOWN|HEALTHY|DEGRADED|ERROR`), `latencyMs`, `lastCheckedAt`, `lastError`, `isDefault`, `createdAt`.
+- `POST /models/providers` — `{ name, kind?, baseUrl, apiKey?, defaultModel?, models?, enabled? }` → `201` summary; audit-logged as `model_provider.created`. `400` invalid URL or duplicate name.
+- `PUT /models/providers/:id` — partial update; an omitted `apiKey` keeps the stored key, a provided one replaces it. `200`; `404`.
+- `DELETE /models/providers/:id` — `200 { deleted, reverted }`; when the deleted provider was the workspace default, routing reverts to `OMNIROUTE`.
+- `POST /models/providers/:id/test` — body `{ chat?: boolean }` → `{ ok, latencyMs, models[], error?, chat?, provider }` and records `status`/`latencyMs`/`lastCheckedAt`/`lastError` (discovery result saved back to `models[]`).
+- `POST /models/discover` — `{ kind, baseUrl, apiKey? }` → `{ models[], latencyMs }` probes an endpoint without saving it; `503` unreachable.
+
+Workspace routing: `PATCH /llm` accepts a custom provider id — it probes the endpoint, verifies the model, stores it as the provider's `defaultModel` and sets `Organization.llmProvider` to the id. Runs (playground, tickets, widget) store that id on `AgentRun.provider`; the worker calls the custom endpoint first and automatically falls back to the workspace OmniRoute/Ollama built-ins on connection-level failures. The worker also sweeps every enabled provider every 15 minutes (`GET {base}/models`) to keep `status`/`latencyMs` fresh, and admin health reports probe the active custom provider instead of the built-ins.
 
 ## Documentation endpoints — `/api` (public, no auth)
 

@@ -22,7 +22,8 @@ Server-side guards are `requireRole([...])` inside routes (returns `403 Insuffic
 - Role changes revoke the target member's active sessions.
 - Invitations can only grant `ADMIN|AGENT|VIEWER` (default `VIEWER`) and must be accepted by the invited email address.
 - Billing changes (checkout, plan switch, cancellation) are restricted to `OWNER|ADMIN` and, when the global enforcement toggle is on, quota/feature limits answer `402 PaymentRequired` after the role and validation checks — see [BILLING.md](BILLING.md).
-- Integrations: every member may read the marketplace catalog, connections, knowledge sources, webhook endpoints, activity and widget settings; `OWNER|ADMIN` is required to connect/disconnect providers, manage sources, create/delete webhook endpoints, and change widget settings or its public key — see [INTEGRATIONS.md](INTEGRATIONS.md).
+- Integrations: every member may read the marketplace catalog, connections, knowledge sources, webhook endpoints, activity and widget settings; `OWNER|ADMIN` is required to connect/disconnect providers, manage sources, create/delete webhook endpoints, and change widget settings or its public key — see [INTEGRATIONS.md](docs/INTEGRATIONS.md).
+- Model providers: every member may view the workspace's custom model endpoints and routing catalog; `OWNER|ADMIN` is required to add, update, delete, test or activate a custom provider and to change the workspace routing (`PATCH /api/llm`). Deleting the active provider reverts routing to OmniRoute.
 
 Listed endpoints: `GET/PATCH /api/members`, `DELETE /api/members/:id`, `GET/POST /api/workspace/invitations`, `DELETE /api/workspace/invitations/:id`, `POST /api/workspace/invitations/accept`, `GET/POST/PATCH /api/api-keys` and `DELETE /api/api-keys/:id` (OWNER/ADMIN only), mirrored by `PATCH /api/admin/members/:id/role` and `POST /api/admin/members/:id/revoke-sessions`.
 

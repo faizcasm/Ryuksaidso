@@ -25,6 +25,7 @@ import { billingRouter } from './routes/billing';
 import { adminBillingRouter } from './routes/admin-billing';
 import { integrationsRouter } from './routes/integrations';
 import { adminIntegrationsRouter } from './routes/admin-integrations';
+import { modelsRouter } from './routes/models';
 import { widgetRouter, widgetCorsHeaders, widgetScriptHandler } from './routes/widget';
 import { captureRequest, ObsRingTransport } from './lib/obs';
 
@@ -142,6 +143,7 @@ export function createApp() {
   app.use('/api/widget', widgetRouter);
   app.use('/api/integrations', integrationsRouter);
   app.use('/api/admin/integrations', adminIntegrationsRouter);
+  app.use('/api/models', modelsRouter);
   app.use('/api', appRouter);
   app.use('/api', accountRouter);
   app.use('/api', approvalRouter);

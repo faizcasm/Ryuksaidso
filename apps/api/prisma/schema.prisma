@@ -49,11 +49,6 @@ enum MemoryKind {
   SEMANTIC
 }
 
-enum LLMProvider {
-  OLLAMA
-  OMNIROUTE
-}
-
 enum ProjectStatus {
   ACTIVE
   PAUSED
@@ -78,7 +73,7 @@ model Organization {
   invitations WorkspaceInvitation[]
   emailRecords EmailRecord[]
   calendarEvents CalendarEvent[]
-  llmProvider LLMProvider @default(OMNIROUTE)
+  llmProvider String @default("OMNIROUTE")
   ollamaModel String @default("qwen2.5-coder:3b-instruct-q4_K_M")
   omnirouteModel String @default("")
   createdAt DateTime @default(now())
@@ -232,7 +227,7 @@ model AgentRun {
   agentId String?
   agentVersionId String?
   status RunStatus @default(QUEUED)
-  provider LLMProvider @default(OLLAMA)
+  provider String @default("OLLAMA")
   trigger String @default("playground")
   environment String @default("development")
   input Json
@@ -751,4 +746,24 @@ model WebhookDelivery {
   @@unique([endpointId, eventId])
   @@index([organizationId, createdAt])
   @@index([endpointId, status])
+}
+
+model ModelProvider {
+  id String @id @default(cuid())
+  organizationId String
+  name String
+  kind String @default("openai_compat")
+  baseUrl String
+  apiKey String @default("")
+  defaultModel String @default("")
+  models String @default("[]")
+  enabled Boolean @default(true)
+  status String @default("UNKNOWN")
+  latencyMs Int?
+  lastCheckedAt DateTime?
+  lastError String @default("")
+  connectedBy String @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([organizationId])
 }

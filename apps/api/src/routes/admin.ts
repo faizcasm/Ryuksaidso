@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { prisma } from '../lib/db';
 import { redis } from '../lib/redis';
-import { providerConfig, type LLMProviderName } from '../lib/config';
+import { providerConfig } from '../lib/config';
+import { getCustomLLMProvider, isBuiltInProvider } from '../services/llm';
+import { decryptModelKey } from '../services/modelProviders';
 import { requireAuth, requireAdmin, type AuthenticatedRequest } from '../middleware';
 import { audit, type AuthUser } from '../lib/auth';
 import { buildSystemUsersOverview } from '../lib/admin-users';
@@ -264,9 +266,20 @@ adminRouter.get('/overview', async (req, res) => {
 
   const dbProbe = await timed(() => prisma.$queryRaw`SELECT 1`, 2000);
   const redisProbe = await timed(() => redis.ping(), 2000);
-  const llmProvider: LLMProviderName = org?.llmProvider === 'OMNIROUTE' ? 'OMNIROUTE' : 'OLLAMA';
-  const llmTarget = providerConfig(llmProvider);
+  const orgProviderId = String(org?.llmProvider || 'OLLAMA');
+  const customRow = isBuiltInProvider(orgProviderId)
+    ? null
+    : await prisma.modelProvider.findFirst({ where: { id: orgProviderId, organizationId: u.organizationId } });
+  const llmProvider = customRow ? customRow.name : orgProviderId === 'OMNIROUTE' ? 'OMNIROUTE' : 'OLLAMA';
+  const customKey = customRow ? decryptModelKey(customRow.apiKey) : '';
+  const llmTarget = customRow
+    ? { baseUrl: customRow.baseUrl, apiKey: customKey, model: customRow.defaultModel }
+    : providerConfig(orgProviderId === 'OMNIROUTE' ? 'OMNIROUTE' : 'OLLAMA');
   const llmProbe = await timed(async () => {
+    if (customRow) {
+      await getCustomLLMProvider(customRow, undefined, customKey).models();
+      return true;
+    }
     const response = await fetch(`${llmTarget.baseUrl}/models`, {
       headers: llmTarget.apiKey ? { authorization: `Bearer ${llmTarget.apiKey}` } : {},
       signal: AbortSignal.timeout(2500),

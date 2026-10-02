@@ -37,10 +37,14 @@
 
 - Local Ollama
 - OmniRoute OpenAI-compatible gateway
-- Workspace default provider (OmniRoute for new workspaces)
+- Custom model providers: bring your own endpoint — OpenRouter, Groq, Together, a company gateway, or a local Ollama / LM Studio / vLLM server (`openai_compat` or `ollama` kind, optional API key, default model)
+- Per-workspace provider CRUD at `/api/models/providers` (OWNER/ADMIN): encrypted API keys (AES-256-GCM), model discovery before activation, duplicate-name guard
+- Endpoint policy: `http(s)` only, cloud metadata addresses blocked, loopback/private addresses allowed for local models, Docker localhost remapped to `host.docker.internal`
+- Workspace default provider (OmniRoute for new workspaces) with one-click "Make default" for custom providers
 - Per-run provider override
+- Custom-provider-first routing with automatic fallback to the workspace built-ins (connection-level failures only)
 - OmniRoute-first with automatic Ollama fallback for ticket runs and evaluations (connection-level failures only; HTTP errors surface instead of silently re-running)
-- Provider model discovery
+- Provider model discovery, health probes (manual Test with optional chat probe plus a 15-minute worker sweep recording status/latency/last error)
 - Persisted provider on each run
 - Docker localhost-to-host routing
 

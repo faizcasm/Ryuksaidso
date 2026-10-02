@@ -3,7 +3,7 @@ export type RuntimeEvent = { runId: string; step: number; agent: string; action:
 
 export type RuntimeDeps = {
   prisma: any;
-  getLLM: (provider: 'OLLAMA' | 'OMNIROUTE', model?: string) => { chat(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>, json?: boolean): Promise<{ content: string; tokens: number }> };
+  getLLM: (provider: string, model?: string) => { chat(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>, json?: boolean): Promise<{ content: string; tokens: number }> };
   logger: { info(meta: unknown, message?: string): void; error(meta: unknown, message?: string): void };
   tools: Record<string, {
     name: string;
@@ -85,10 +85,22 @@ export async function executeAgentRun(deps: RuntimeDeps, runId: string, user: Ru
 
   try {
     const payload = (run.input ?? {}) as { prompt?: string; metadata?: Record<string, unknown>; ticketId?: string };
-    const provider = (run.provider || 'OLLAMA') as 'OLLAMA' | 'OMNIROUTE';
-    const organization = await deps.prisma.organization.findUnique({ where: { id: user.organizationId }, select: { ollamaModel: true, omnirouteModel: true } });
-    const model = provider === 'OMNIROUTE' ? organization?.omnirouteModel : organization?.ollamaModel;
-    const llm = deps.getLLM(provider, model || undefined);
+    const provider = String(run.provider || 'OLLAMA');
+    const organization = await deps.prisma.organization.findUnique({ where: { id: user.organizationId }, select: { llmProvider: true, ollamaModel: true, omnirouteModel: true } });
+    let providerName = provider;
+    let model = '';
+    if (provider === 'OMNIROUTE') model = organization?.omnirouteModel || '';
+    else if (provider === 'OLLAMA') model = organization?.ollamaModel || '';
+    else {
+      const custom = await deps.prisma.modelProvider.findFirst({ where: { id: provider, organizationId: user.organizationId } });
+      if (custom && custom.enabled && custom.defaultModel) {
+        model = custom.defaultModel;
+      } else {
+        providerName = organization?.llmProvider === 'OMNIROUTE' ? 'OMNIROUTE' : 'OLLAMA';
+        model = providerName === 'OMNIROUTE' ? organization?.omnirouteModel || '' : organization?.ollamaModel || '';
+      }
+    }
+    const llm = deps.getLLM(providerName, model || undefined);
     const prompt = String(payload.prompt ?? payload.ticketId ?? '').trim();
     if (!prompt) throw new Error('Run input must include a prompt');
 

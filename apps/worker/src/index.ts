@@ -3,7 +3,7 @@ import Redis from 'ioredis';
 import { PrismaClient } from '@prisma/client';
 import pino from 'pino';
 import { executeAgentRun } from '@ryuksaidso/agent-runtime';
-import { buildTools, loadMcpTools, mcpConfigured, appendObsLog, emitWebhookEvent, runDueSyncs, sweepPendingDeliveries, type ToolDef } from '@ryuksaidso/agent-tools';
+import { buildTools, loadMcpTools, mcpConfigured, appendObsLog, emitWebhookEvent, runDueSyncs, sweepPendingDeliveries, decryptSecret, type ToolDef } from '@ryuksaidso/agent-tools';
 import { Writable } from 'node:stream';
 
 const redis = new Redis(process.env.REDIS_URL || 'redis://redis:6379', { maxRetriesPerRequest: null });
@@ -49,7 +49,31 @@ class LLMConnectionError extends Error {
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 const loggedSettings = new Set<string>();
 
-function providerSettings(provider: 'OLLAMA'|'OMNIROUTE', model?: string) {
+function isCustomProvider(provider: string) {
+  return provider !== 'OLLAMA' && provider !== 'OMNIROUTE';
+}
+
+function remapLocalhost(baseUrl: string): string {
+  if (process.env.DOCKER_RUNTIME !== 'true') return baseUrl;
+  try {
+    const url = new URL(baseUrl);
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '::1') {
+      url.hostname = 'host.docker.internal';
+      return url.toString();
+    }
+  } catch {
+    return baseUrl.replace('://localhost:', '://host.docker.internal:').replace('://127.0.0.1:', '://host.docker.internal:');
+  }
+  return baseUrl;
+}
+
+function customBaseUrl(baseUrl: string, kind: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '');
+  if (kind === 'ollama' && !/\/v1$/.test(trimmed)) return `${trimmed}/v1`;
+  return trimmed;
+}
+
+function providerSettings(provider: string, model?: string) {
   const isDocker = process.env.DOCKER_RUNTIME === 'true';
 
   let ollamaBase = (process.env.OLLAMA_URL || 'http://localhost:11434').replace(/\/v1\/?$/, '');
@@ -93,59 +117,82 @@ function providerSettings(provider: 'OLLAMA'|'OMNIROUTE', model?: string) {
   return settings;
 }
 
-function isProviderConfigured(provider: 'OLLAMA'|'OMNIROUTE') {
+function isProviderConfigured(provider: string) {
   if (provider === 'OMNIROUTE') return Boolean(process.env.OMNIROUTE_URL || process.env.OMNIROUTE_MODEL);
   return Boolean(process.env.OLLAMA_URL || process.env.OLLAMA_MODEL);
 }
 
-async function callProvider(provider: 'OLLAMA'|'OMNIROUTE', model: string | undefined, messages: ChatMessage[], json: boolean) {
-  const { baseUrl, apiKey, model: resolvedModel } = providerSettings(provider, model);
-  if (!resolvedModel) throw new Error(`${provider} model is not configured. Set ${provider}_MODEL.`);
+async function customProviderSettings(providerId: string, organizationId: string, model?: string) {
+  const row = await prisma.modelProvider.findUnique({ where: { id: providerId } });
+  if (!row || row.organizationId !== organizationId) throw new Error(`Model provider ${providerId} is not available in this workspace`);
+  if (!row.enabled) throw new Error(`Model provider ${row.name} is disabled`);
+  let apiKey = '';
+  if (row.apiKey) {
+    try {
+      apiKey = decryptSecret(row.apiKey);
+    } catch {
+      apiKey = '';
+    }
+  }
+  return { baseUrl: remapLocalhost(customBaseUrl(row.baseUrl, row.kind)), apiKey, model: model || row.defaultModel, label: row.name };
+}
+
+async function postChat(args: { baseUrl: string; apiKey: string; label: string; model: string; messages: ChatMessage[]; json: boolean; hint: string }) {
+  const { baseUrl, apiKey, label, model, messages, json, hint } = args;
+  const doFetch = (includeJson: boolean) => fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}) },
+    body: JSON.stringify({ model, messages, temperature: 0.1, ...(includeJson ? { response_format: { type: 'json_object' } } : {}) }),
+    signal: AbortSignal.timeout(120_000)
+  });
 
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}) },
-      body: JSON.stringify({ model: resolvedModel, messages, temperature: 0.1, ...(json ? { response_format: { type: 'json_object' } } : {}) }),
-      signal: AbortSignal.timeout(120_000)
-    });
+    response = await doFetch(json);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw new LLMConnectionError(
-      `${provider} is unreachable at ${baseUrl} (${reason}). ` +
-      `Check that the provider is running on the host and that ${provider}_URL is correct` +
-      (process.env.DOCKER_RUNTIME === 'true' ? ' (inside Docker localhost is remapped to host.docker.internal).' : '.')
-    );
+    throw new LLMConnectionError(`${label} is unreachable at ${baseUrl} (${reason}). ${hint}`);
   }
 
   if (!response.ok && json && (response.status === 400 || response.status === 422)) {
     try {
-      response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}) },
-        body: JSON.stringify({ model: resolvedModel, messages, temperature: 0.1 }),
-        signal: AbortSignal.timeout(120_000)
-      });
+      response = await doFetch(false);
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
-      throw new LLMConnectionError(`${provider} is unreachable at ${baseUrl} (${reason}).`);
+      throw new LLMConnectionError(`${label} is unreachable at ${baseUrl} (${reason}). ${hint}`);
     }
   }
 
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
-    throw new Error(`${provider} request failed: ${response.status}${detail ? ` ${detail.slice(0, 500)}` : ''}`);
+    throw new Error(`${label} request failed: ${response.status}${detail ? ` ${detail.slice(0, 500)}` : ''}`);
   }
 
   const data = await response.json() as { choices?: Array<{ message?: { content?: string } }>; usage?: { total_tokens?: number } };
   const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error(`${provider} returned an empty response`);
+  if (!content) throw new Error(`${label} returned an empty response`);
   return { content, tokens: data.usage?.total_tokens || 0 };
 }
 
-async function chatWithFallback(primary: 'OLLAMA'|'OMNIROUTE', model: string | undefined, messages: ChatMessage[], json: boolean) {
-  const attemptOrder: Array<'OLLAMA'|'OMNIROUTE'> = [primary, primary === 'OLLAMA' ? 'OMNIROUTE' : 'OLLAMA'];
+async function callProvider(provider: string, model: string | undefined, messages: ChatMessage[], json: boolean, organizationId: string) {
+  if (isCustomProvider(provider)) {
+    const settings = await customProviderSettings(provider, organizationId, model);
+    if (!settings.model) throw new Error(`${settings.label} has no model configured. Choose a model in Settings.`);
+    return postChat({ ...settings, messages, json, hint: 'Verify the endpoint URL is correct and reachable from the worker.' });
+  }
+
+  const { baseUrl, apiKey, model: resolvedModel } = providerSettings(provider, model);
+  if (!resolvedModel) throw new Error(`${provider} model is not configured. Set ${provider}_MODEL.`);
+  const hint =
+    `Check that the provider is running on the host and that ${provider}_URL is correct` +
+    (process.env.DOCKER_RUNTIME === 'true' ? ' (inside Docker localhost is remapped to host.docker.internal).' : '.');
+  return postChat({ baseUrl, apiKey, label: provider, model: resolvedModel, messages, json, hint });
+}
+
+async function chatWithFallback(primary: string, model: string | undefined, messages: ChatMessage[], json: boolean, organizationId: string) {
+  const attemptOrder: string[] = isCustomProvider(primary)
+    ? [primary, 'OMNIROUTE', 'OLLAMA']
+    : [primary, primary === 'OLLAMA' ? 'OMNIROUTE' : 'OLLAMA'];
   const errors: string[] = [];
 
   for (const provider of attemptOrder) {
@@ -154,7 +201,7 @@ async function chatWithFallback(primary: 'OLLAMA'|'OMNIROUTE', model: string | u
 
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const result = await callProvider(provider, isFallback ? undefined : model, messages, json);
+        const result = await callProvider(provider, isFallback ? undefined : model, messages, json, organizationId);
         if (errors.length) logger.warn({ provider }, 'LLM call succeeded after falling back to another provider');
         return result;
       } catch (error) {
@@ -196,9 +243,9 @@ const worker = new Worker('agent-runs', async (job) => {
 
   return executeAgentRun({
     prisma,
-    getLLM: (_provider, modelOverride) => ({
+    getLLM: (provider, modelOverride) => ({
       async chat(messages, json = false) {
-        return chatWithFallback(_provider, modelOverride, messages, json);
+        return chatWithFallback(provider, modelOverride, messages, json, user.organizationId);
       }
     }),
     logger,
@@ -265,6 +312,52 @@ worker.on('error', error => logger.error({ error: error.message }, 'worker error
 const MAINTENANCE_INTERVAL_MS = Number(process.env.INTEGRATION_MAINTENANCE_INTERVAL_MS || 15 * 60 * 1000);
 let maintenanceRunning = false;
 
+async function probeModelProviders() {
+  const rows = await prisma.modelProvider.findMany({ where: { enabled: true } });
+  if (!rows.length) return;
+  const results = await Promise.all(rows.map(async (row: any) => {
+    const started = Date.now();
+    let status = 'HEALTHY';
+    let lastError = '';
+    let discovered: string[] = [];
+    try {
+      const baseUrl = remapLocalhost(customBaseUrl(row.baseUrl, row.kind));
+      let apiKey = '';
+      if (row.apiKey) {
+        try {
+          apiKey = decryptSecret(row.apiKey);
+        } catch {
+          apiKey = '';
+        }
+      }
+      const response = await fetch(`${baseUrl}/models`, {
+        headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json() as { data?: Array<{ id?: string }> };
+      discovered = (data.data ?? []).map(x => x.id).filter((x): x is string => Boolean(x));
+    } catch (error) {
+      status = 'ERROR';
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    return { id: row.id, status, lastError, latencyMs: Date.now() - started, discovered };
+  }));
+  for (const result of results) {
+    await prisma.modelProvider.update({
+      where: { id: result.id },
+      data: {
+        status: result.status,
+        latencyMs: result.latencyMs,
+        lastCheckedAt: new Date(),
+        lastError: result.lastError,
+        ...(result.status === 'HEALTHY' && result.discovered.length ? { models: JSON.stringify(result.discovered) } : {}),
+      },
+    });
+  }
+  logger.info({ checked: results.length, unhealthy: results.filter(r => r.status !== 'HEALTHY').length }, 'model provider health sweep finished');
+}
+
 async function runMaintenance() {
   if (maintenanceRunning) return;
   maintenanceRunning = true;
@@ -277,6 +370,7 @@ async function runMaintenance() {
       where: { lastActiveAt: { lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
     });
     if (pruned.count) logger.info({ pruned: pruned.count }, 'stale widget sessions pruned');
+    await probeModelProviders();
   } catch (error) {
     logger.error({ error: error instanceof Error ? error.message : String(error) }, 'integration maintenance failed');
   } finally {
