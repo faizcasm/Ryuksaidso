@@ -167,3 +167,14 @@ export async function sendWorkspaceInvitationEmail(to: string, workspaceName: st
   );
   logger.info('Workspace invitation sent', { to, workspaceName, role, event: 'workspace_invitation_sent' });
 }
+
+export async function sendPromoCodeEmail(to: string, code: string, billingUrl: string) {
+  const safeCode = escapeHtml(code);
+  await sendEmail(
+    to,
+    `${config.APP_NAME} — your 20% subscription discount`,
+    `You connected your own model provider and ran agents through it, so your 20% discount is unlocked.\n\nPromo code: ${code}\n\nApply it in Settings → Billing before checkout:\n${billingUrl}`,
+    `<div style="font-family:Arial,sans-serif;max-width:640px;margin:auto"><h2>Your 20% discount is unlocked</h2><p>Thanks for bringing your own model provider to ${config.APP_NAME}. Apply this code at <b>Settings &rarr; Billing</b> to get <b>20% off</b> your subscription:</p><p style="font-size:22px;font-weight:bold;letter-spacing:2px;padding:14px 18px;border-radius:8px;background:#f3efff;color:#7c3aed;text-align:center">${safeCode}</p><p><a href="${escapeHtml(billingUrl)}" style="display:inline-block;padding:12px 18px;border-radius:8px;background:#7c3aed;color:#fff;text-decoration:none">Open billing</a></p></div>`
+  );
+  logger.info('Promo code email sent', { to, event: 'promo_code_email_sent' });
+}

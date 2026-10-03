@@ -1,0 +1,2 @@
+ALTER TABLE "AgentRun" ADD COLUMN "model" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "Organization" ADD COLUMN "promoCodeSentAt" TIMESTAMP(3);

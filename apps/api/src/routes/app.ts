@@ -71,7 +71,7 @@ appRouter.post('/tickets/:id/run', async (req, res) => {
   const provider = resolved.provider;
   const currentRuns = await prisma.agentRun.count({ where: { organizationId: u.organizationId, createdAt: { gte: monthStart() } } });
   await assertQuota(u.organizationId, 'runs', currentRuns);
-  const run = await prisma.agentRun.create({ data: { organizationId: u.organizationId, projectId: agent.projectId, ticketId: ticket.id, agentId: agent.id, agentVersionId: agent.versions[0]?.id, provider, status: 'QUEUED', trigger: 'ticket', environment: 'production', input: { prompt: `${ticket.title}
+  const run = await prisma.agentRun.create({ data: { organizationId: u.organizationId, projectId: agent.projectId, ticketId: ticket.id, agentId: agent.id, agentVersionId: agent.versions[0]?.id, provider, model: resolved.model, status: 'QUEUED', trigger: 'ticket', environment: 'production', input: { prompt: `${ticket.title}
 
 ${ticket.description}`, ticketId: ticket.id } } });
   const job = await enqueueRun(run.id, u.organizationId, u);

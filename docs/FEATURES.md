@@ -47,6 +47,9 @@
 - Provider model discovery, health probes (manual Test with optional chat probe plus a 15-minute worker sweep recording status/latency/last error)
 - Persisted provider on each run
 - Docker localhost-to-host routing
+- Runs record the resolved provider **and model** at creation (`AgentRun.model`) so usage is attributable per model
+- `GET /api/models/usage`:30-day analytics — custom + platform provider cards (runs, completions, failures, tokens, last used), a model leaderboard, a zero-filled 14-day series and BYO promo qualification
+- Command Center "Model providers & usage" panel: provider cards, runs-per-day chart, tokens-per-provider bars, model leaderboard and the 20% promo banner
 
 ## Identity and security
 
@@ -114,6 +117,9 @@
 - Public `/pricing` page + Settings → Billing section with usage meters
 - Admin → Billing dashboard: global enforcement toggle, MRR, plans CRUD, subscription override/sync/cancel, payment and webhook inspection
 - Global bypass: billing off (default) = full access everywhere; billing outage fails open
+- Bring-your-own-provider promo: connect a custom model provider and complete a run through it and `RyuksaidsoISLIVE20` unlocks **20% off** — validated server-side (qualification + timing-safe code match), emailed once per workspace (`Organization.promoCodeSentAt`) and also shown in Command Center
+- Promo checkout: `POST /api/billing/promo/validate` checks the code; `POST /api/billing/checkout` takes an optional `promoCode`, charges `amount × 0.8` and creates a distinct discounted Cashfree plan (the plan id embeds the amount, so the full-price cache is never clobbered) with the discount recorded in the audit log
+- Promo input in Settings → Billing: server-side validation, struck-through plan prices while applied, remove option; a hint in Billing advertises the offer before qualification
 - Provider-neutral schema and `BillingProvider` interface so Stripe can be added without touching routes
 - `402 PaymentRequired` error envelope with upgrade banners in the app
 

@@ -309,6 +309,7 @@ export function PlanCards({
   busy,
   canChoose,
   includeFree,
+  discountPercent,
 }: {
   plans: BillingPlan[];
   period: "MONTHLY" | "YEARLY";
@@ -317,6 +318,7 @@ export function PlanCards({
   busy?: string;
   canChoose?: boolean;
   includeFree?: boolean;
+  discountPercent?: number;
 }) {
   const paid = includeFree
     ? [...plans].sort((a, b) => a.sortOrder - b.sortOrder)
@@ -326,14 +328,27 @@ export function PlanCards({
       {paid.map((plan) => {
         const current = currentPlanCode === plan.code;
         const amount = period === "MONTHLY" ? plan.priceMonthly : plan.priceYearly;
+        const discounted =
+          discountPercent && discountPercent > 0
+            ? Math.round((amount * (100 - discountPercent)) / 100)
+            : null;
         return (
           <div className={`plan-card ${current ? "current" : ""}`} key={plan.id}>
             <div className="plan-card-top">
               <h3>{plan.name}</h3>
               {current && <span className="pill ok">current</span>}
+              {!current && discounted !== null && (
+                <span className="pill ok">-{discountPercent}%</span>
+              )}
             </div>
             <div className="plan-price">
-              {inr(amount)}
+              {discounted !== null && !current ? (
+                <>
+                  <s className="plan-price-was">{inr(amount)}</s> {inr(discounted)}
+                </>
+              ) : (
+                inr(amount)
+              )}
               <small> / {period === "MONTHLY" ? "month" : "year"}</small>
             </div>
             <p className="plan-desc">{plan.description}</p>
@@ -380,6 +395,10 @@ export function BillingSection({ canManage }: { canManage: boolean }) {
   const [message, setMessage] = useState<Message>(null);
   const [phoneFor, setPhoneFor] = useState("");
   const [phone, setPhone] = useState("");
+  const [promo, setPromo] = useState("");
+  const [promoState, setPromoState] = useState<"idle" | "checking" | "applied" | "error">("idle");
+  const [promoPercent, setPromoPercent] = useState(0);
+  const [promoMsg, setPromoMsg] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -456,6 +475,25 @@ export function BillingSection({ canManage }: { canManage: boolean }) {
     };
   }, [load]);
 
+  async function applyPromo() {
+    const code = promo.trim();
+    if (!code || busy || promoState === "checking" || promoState === "applied") return;
+    setPromoState("checking");
+    setPromoMsg("");
+    try {
+      const result = await api<{ valid: boolean; discountPercent: number }>("/billing/promo/validate", {
+        method: "POST",
+        body: JSON.stringify({ code }),
+      });
+      setPromoPercent(result.discountPercent);
+      setPromoState("applied");
+      setPromoMsg(`${result.discountPercent}% off will be applied at checkout.`);
+    } catch (e) {
+      setPromoState("error");
+      setPromoMsg(readError(e, "That promo code is not valid."));
+    }
+  }
+
   async function startCheckout(planCode: string) {
     if (busy) return;
     if (!canManage) {
@@ -491,7 +529,12 @@ export function BillingSection({ canManage }: { canManage: boolean }) {
     try {
       const result = await api<CheckoutResponse>("/billing/checkout", {
         method: "POST",
-        body: JSON.stringify({ planCode, period, phone: digits }),
+        body: JSON.stringify({
+          planCode,
+          period,
+          phone: digits,
+          ...(promoState === "applied" && promo.trim() ? { promoCode: promo.trim() } : {}),
+        }),
       });
       if (result.mode === "downgraded") {
         setMessage({ kind: "ok", text: "Switched to the Free plan." });
@@ -682,6 +725,59 @@ export function BillingSection({ canManage }: { canManage: boolean }) {
             </button>
           </div>
 
+          <div className="promo-row">
+            <div className="promo-field">
+              <span>Promo code</span>
+              <div>
+                <input
+                  value={promo}
+                  onChange={(e) => {
+                    setPromo(e.target.value);
+                    if (promoState !== "checking") {
+                      setPromoState("idle");
+                      setPromoMsg("");
+                    }
+                  }}
+                  placeholder="RyuksaidsoISLIVE20"
+                  maxLength={64}
+                  disabled={promoState === "applied" || promoState === "checking"}
+                />
+                <button
+                  className="secondary"
+                  type="button"
+                  onClick={applyPromo}
+                  disabled={!promo.trim() || promoState === "checking" || promoState === "applied"}
+                >
+                  {promoState === "checking" ? "Checking…" : "Apply"}
+                </button>
+              </div>
+            </div>
+            {promoState === "applied" && (
+              <span className="good-text promo-note">
+                {promoMsg}{" "}
+                <button
+                  className="ghost"
+                  type="button"
+                  onClick={() => {
+                    setPromoState("idle");
+                    setPromo("");
+                    setPromoMsg("");
+                    setPromoPercent(0);
+                  }}
+                >
+                  Remove
+                </button>
+              </span>
+            )}
+            {promoState === "error" && <span className="bad-text promo-note">{promoMsg}</span>}
+            {promoState === "idle" && !promo && (
+              <span className="promo-hint">
+                Bring your own model provider and run an agent through it to unlock your
+                20% code by email.
+              </span>
+            )}
+          </div>
+
           <PlanCards
             plans={plans}
             period={period}
@@ -689,6 +785,7 @@ export function BillingSection({ canManage }: { canManage: boolean }) {
             onChoose={(plan) => startCheckout(plan.code)}
             busy={busy}
             canChoose={canManage}
+            discountPercent={promoState === "applied" ? promoPercent : undefined}
           />
 
           {currentPlan && currentPlan.code !== "free" && canManage && (

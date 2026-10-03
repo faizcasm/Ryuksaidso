@@ -60,6 +60,7 @@ describe('POST /api/tickets/:id/run', () => {
     expect(response.status).toBe(202);
     expect(response.body).toMatchObject({ jobId: 'job-1', runId: 'run-1' });
     expect(vi.mocked(prisma.agentRun.create).mock.calls[0][0].data.provider).toBe('OLLAMA');
+    expect(vi.mocked(prisma.agentRun.create).mock.calls[0][0].data.model).toBe('qwen-local');
     expect(enqueueRun).toHaveBeenCalledWith('run-1', 'org1', expect.objectContaining({ id: 'u1' }));
   });
 
@@ -72,6 +73,7 @@ describe('POST /api/tickets/:id/run', () => {
 
     expect(response.status).toBe(202);
     expect(vi.mocked(prisma.agentRun.create).mock.calls[0][0].data.provider).toBe('OMNIROUTE');
+    expect(vi.mocked(prisma.agentRun.create).mock.calls[0][0].data.model).toBe('or-model');
   });
 
   it('falls back to the default provider when the workspace has none', async () => {

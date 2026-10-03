@@ -879,6 +879,8 @@ controlRouter.post(
 
             provider: provider as any,
 
+            model: resolved.model,
+
             status:
               'QUEUED',
 
@@ -974,6 +976,8 @@ controlRouter.post(
               run.agentVersionId,
 
             provider: run.provider,
+
+            model: run.model,
 
             status:
               'QUEUED',

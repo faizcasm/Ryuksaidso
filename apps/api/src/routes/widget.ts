@@ -284,7 +284,13 @@ widgetRouter.post('/:key/messages', async (req, res, next) => {
       include: { versions: { orderBy: { version: 'desc' }, take: 1 } },
     });
     if (!agent) return res.status(503).json({ error: 'Unavailable', message: 'Chat is not fully configured' });
-    const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { llmProvider: true } });
+    const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { llmProvider: true, ollamaModel: true, omnirouteModel: true } });
+    const provider = organization?.llmProvider ?? 'OMNIROUTE';
+    const model = provider === 'OMNIROUTE'
+      ? organization?.omnirouteModel || ''
+      : provider === 'OLLAMA'
+        ? organization?.ollamaModel || ''
+        : '';
 
     const run = await prisma.agentRun.create({
       data: {
@@ -292,7 +298,8 @@ widgetRouter.post('/:key/messages', async (req, res, next) => {
         projectId: agent.projectId ?? null,
         agentId: agent.id,
         agentVersionId: agent.versions[0]?.id ?? null,
-        provider: (organization?.llmProvider ?? 'OMNIROUTE') as any,
+        provider: provider as any,
+        model,
         status: 'QUEUED',
         trigger: 'widget',
         environment: 'production',

@@ -918,6 +918,7 @@ marketplaceRouter.post('/agents/:slug/try', async (req, res, next) => {
         agentId: preview.id,
         agentVersionId: previewVersionId,
         provider: resolvedProvider.provider,
+        model: resolvedProvider.model,
         status: 'QUEUED',
         trigger: 'marketplace',
         environment: 'development',

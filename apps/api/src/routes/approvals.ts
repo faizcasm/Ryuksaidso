@@ -54,6 +54,7 @@ approvalRouter.post('/approvals/:id/decision', async (req, res) => {
           agentId: sourceRun.agentId,
           agentVersionId: sourceRun.agentVersionId,
           provider: sourceRun.provider,
+          model: sourceRun.model,
           status: 'QUEUED',
           trigger: 'approval-resume',
           environment: sourceRun.environment,

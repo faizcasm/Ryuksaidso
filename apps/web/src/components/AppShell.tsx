@@ -70,6 +70,7 @@ import {
 } from "./CeoSupport";
 import { IntegrationsView } from "./Integrations";
 import { MarketplaceAdminSection, MarketplaceView } from "./Marketplace";
+import { ModelUsagePanel } from "./ModelUsage";
 import { ModelProvidersSection } from "./ModelProviders";
 
 type User = {
@@ -2312,6 +2313,7 @@ function CommandCenter({
           </div>
         </section>
       </div>
+      <ModelUsagePanel />
       <section className="panel">
         <PanelHeader
           icon={FileClock}

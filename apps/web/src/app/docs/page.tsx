@@ -1277,6 +1277,23 @@ docker compose logs -f worker`}
           ]}
         />
 
+        <H>Model usage &amp; promo</H>
+        <Endpoints
+          items={[
+            ["GET", "/api/models/usage", "30-day provider/model analytics: runs, tokens, model leaderboard, 14-day series and promo state."],
+            ["POST", "/api/billing/promo/validate", "Check a promo code server-side — eligibility plus the code must both match."],
+            ["POST", "/api/billing/checkout", "Starts a checkout; include promoCode in the body for 20% off when qualified."],
+          ]}
+        />
+        <Bullets
+          items={[
+            <>Bring your own model provider, run an agent through it, and <code>RyuksaidsoISLIVE20</code> unlocks 20% off your subscription.</>,
+            <>Qualification is strict: a custom <code>ModelProvider</code> row plus a <code>COMPLETED</code> run recorded against it.</>,
+            <>The code is emailed once per workspace and always visible in Command Center even when email delivery is off.</>,
+            <>Command Center renders the same data as provider cards, a runs-per-day chart, tokens per provider and a model leaderboard.</>,
+          ]}
+        />
+
         <H>Limits</H>
         <Bullets
           items={[
@@ -1468,6 +1485,18 @@ docker compose logs -f worker`}
           <p>
             Yes — the <Link href="/playground">live playground</Link> and the{" "}
             <Link href="/architecture">3D architecture map</Link> are both open.
+          </p>
+        </details>
+
+        <details className="dx-faq">
+          <summary>How do I get 20% off my subscription?</summary>
+          <p>
+            Bring your own model provider (Settings → Models), then run an agent
+            through it. Once a run completes against your provider we email you{" "}
+            <code>RyuksaidsoISLIVE20</code> — the same code also appears in
+            Command Center. Paste it into Settings → Billing before checkout to
+            take 20% off.{" "}
+            <Link href="/pricing">See current plan prices</Link>.
           </p>
         </details>
 

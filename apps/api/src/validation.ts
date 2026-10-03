@@ -64,7 +64,8 @@ export const acceptInvitationSchema = z.object({ token: z.string().min(20).max(3
 export const checkoutSchema = z.object({
   planCode: z.string().trim().min(1).max(40),
   period: z.enum(['MONTHLY','YEARLY']).default('MONTHLY'),
-  phone: z.string().trim().max(20).optional()
+  phone: z.string().trim().max(20).optional(),
+  promoCode: z.string().trim().min(1).max(64).optional()
 }).refine(v => {
   if (!v.phone) return true;
   const digits = v.phone.replace(/[^0-9]/g, '');
@@ -73,6 +74,10 @@ export const checkoutSchema = z.object({
 }, {
   message: 'Enter a valid 10-digit Indian mobile number',
   path: ['phone']
+});
+
+export const promoValidateSchema = z.object({
+  code: z.string().trim().min(1).max(64)
 });
 
 export const cancelSubscriptionSchema = z.object({

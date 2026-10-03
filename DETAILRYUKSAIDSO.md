@@ -305,8 +305,8 @@ ryuksaidsoproductionready/
 │   │   │   ├── services/     # email, llm (providers+fallback), queue, tools
 │   │   │   ├── agents/       # runtime.ts, evaluate.ts
 │   │   │   ├── lib/          # auth, config, db, logger, metrics, redis
-│   │   │   └── __tests__/    # 18 vitest suites (396 tests)
-│   │   └── prisma/           # schema.prisma (466 lines) + 11 migrations
+│   │   │   └── __tests__/    # 19 vitest suites (411 tests)
+│   │   └── prisma/           # schema.prisma (884 lines) + 17 migrations
 │   ├── web/                  # Next.js 15 control plane
 │   │   └── src/
 │   │       ├── app/          # routes: /, /auth, /dashboard, /docs, /architecture,
@@ -695,7 +695,7 @@ pnpm test       # vitest (API suites)
 
 | Layer | Tool | Current state |
 |---|---|---|
-| **Unit/integration** | Vitest (`apps/api`) | **396 tests / 18 suites passing** — calculator safety, knowledge terms, 46-tool registry & metadata, `unit_convert`, `text_tools`, **weather two-source fallback (stubbed fetch)**, tool governance (system-admin-only 403s, SQL/file-system guards, secret redaction, approval flags, search filters), system users overview builder, auth, server routes, LLM fallback (OmniRoute→Ollama), evaluator, billing (Cashfree signatures, webhook idempotency, entitlements, plan-change settling), integrations (credential crypto, OAuth exchange, webhook signing/delivery, knowledge sync, widget routes, marketplace/admin guards), model providers (custom endpoint CRUD, encrypted API keys, endpoint URL guards, health probes, workspace routing and run fallback), customer support (CEO message send, per-user cooldown, admin inbox guards), agent marketplace (catalog browse/filter, versions/rollback, review queue, install dependency reports, paid entitlements, fork, preview runs, ratings, admin moderation) |
+| **Unit/integration** | Vitest (`apps/api`) | **411 tests / 19 suites passing** — calculator safety, knowledge terms, 46-tool registry & metadata, `unit_convert`, `text_tools`, **weather two-source fallback (stubbed fetch)**, tool governance (system-admin-only 403s, SQL/file-system guards, secret redaction, approval flags, search filters), system users overview builder, auth, server routes, LLM fallback (OmniRoute→Ollama), evaluator, billing (Cashfree signatures, webhook idempotency, entitlements, plan-change settling), integrations (credential crypto, OAuth exchange, webhook signing/delivery, knowledge sync, widget routes, marketplace/admin guards), model providers (custom endpoint CRUD, encrypted API keys, endpoint URL guards, health probes, workspace routing and run fallback), customer support (CEO message send, per-user cooldown, admin inbox guards), agent marketplace (catalog browse/filter, versions/rollback, review queue, install dependency reports, paid entitlements, fork, preview runs, ratings, admin moderation), model usage analytics and the bring-your-own-provider promo (qualification gates, discounted Cashfree checkout, one-time code email) |
 | **Static** | `tsc --noEmit` | **5/5 workspaces clean** |
 | **UI regression (browser)** | scripted Playwright harness (test-only, never shipped) | `ux-ui.mjs` → **33/33** (panels, charts, refresh, toast dismiss/close, theming, zero console errors); `tools-ui.mjs` → all pass (46 tools in picker, prompt badge) |
 | **End-to-end** | `tools-e2e.sh` against the live Docker stack | **ALL PASS (50+ checks)**: registry, agent+prompt persistence, 4 completed LLM runs (time/calculator, weather with real conditions, web_search, github, dedicated **new-tools run**), system-prompt persona in answers, ticket → OmniRoute → approval → continuation + reply, evaluation answered by OmniRoute with per-case results |

@@ -17,7 +17,8 @@ import {
   totalCountForPeriod,
 } from '../services/billing';
 import { processWebhookEvent } from '../services/billing/webhooks';
-import { cancelSubscriptionSchema, checkoutSchema, verifyCheckoutSchema } from '../validation';
+import { PROMO_CODE, PROMO_DISCOUNT_PERCENT, validatePromoCode } from '../services/promo';
+import { cancelSubscriptionSchema, checkoutSchema, promoValidateSchema, verifyCheckoutSchema } from '../validation';
 
 export const billingRouter = Router();
 
@@ -159,7 +160,7 @@ async function ensureCustomerRecord(user: AuthUser, phone: string) {
   };
 }
 
-async function startCheckout(user: AuthUser, planCode: string, period: 'MONTHLY' | 'YEARLY', phone?: string) {
+async function startCheckout(user: AuthUser, planCode: string, period: 'MONTHLY' | 'YEARLY', phone?: string, promoCode?: string) {
   const setting = await getBillingSetting();
   if (!setting.billingEnabled) {
     throw Object.assign(new Error('Billing is disabled on this deployment — every plan is unlocked without payment'), {
@@ -199,9 +200,19 @@ async function startCheckout(user: AuthUser, planCode: string, period: 'MONTHLY'
     return { mode: 'downgraded' as const, planCode: plan.code };
   }
 
-  const amount = period === 'MONTHLY' ? plan.priceMonthly : plan.priceYearly;
-  if (amount <= 0) {
+  const baseAmount = period === 'MONTHLY' ? plan.priceMonthly : plan.priceYearly;
+  if (baseAmount <= 0) {
     throw Object.assign(new Error('This plan has no price configured for the selected billing period'), { statusCode: 400 });
+  }
+  let amount = baseAmount;
+  let promoApplied = false;
+  if (promoCode) {
+    const promo = await validatePromoCode(promoCode, user.organizationId);
+    if (!promo.valid) {
+      throw Object.assign(new Error(promo.message ?? 'That promo code is not valid.'), { statusCode: 400 });
+    }
+    amount = Math.round((baseAmount * (100 - PROMO_DISCOUNT_PERCENT)) / 100);
+    promoApplied = true;
   }
 
   if (latest && ['ACTIVE', 'PENDING'].includes(latest.status) && latest.planId === plan.id && latest.period === period) {
@@ -243,7 +254,7 @@ async function startCheckout(user: AuthUser, planCode: string, period: 'MONTHLY'
   const customerRecord = await ensureCustomerRecord(user, normalizedPhone);
 
   const remotePlanField = period === 'MONTHLY' ? 'providerPlanMonthly' : 'providerPlanYearly';
-  let remotePlanId = plan[remotePlanField];
+  let remotePlanId = promoApplied ? '' : plan[remotePlanField];
   if (!remotePlanId) {
     remotePlanId = await provider.ensurePlan({
       planCode: plan.code,
@@ -254,7 +265,7 @@ async function startCheckout(user: AuthUser, planCode: string, period: 'MONTHLY'
       description: plan.description,
       totalCount: totalCountForPeriod(period),
     });
-    await prisma.billingPlan.update({ where: { id: plan.id }, data: { [remotePlanField]: remotePlanId } });
+    if (!promoApplied) await prisma.billingPlan.update({ where: { id: plan.id }, data: { [remotePlanField]: remotePlanId } });
   }
 
   const remote = await provider.createSubscription({
@@ -287,7 +298,12 @@ async function startCheckout(user: AuthUser, planCode: string, period: 'MONTHLY'
     },
   });
 
-  await audit(user, 'billing.checkout_created', 'subscription', local.id, { planCode: plan.code, period, amount });
+  await audit(user, 'billing.checkout_created', 'subscription', local.id, {
+    planCode: plan.code,
+    period,
+    amount,
+    ...(promoApplied ? { promoCode, discountPercent: PROMO_DISCOUNT_PERCENT } : {}),
+  });
   billingEvents.inc({ event: 'checkout_created' });
   return checkoutPayload(environment, { ...local, sessionId: remote.sessionId }, plan);
 }
@@ -368,18 +384,33 @@ billingRouter.get('/payments', async (req, res) => {
   res.json(payments.map(publicPayment).filter(Boolean));
 });
 
+billingRouter.post('/promo/validate', async (req, res, next) => {
+  try {
+    const user = auth(req as AuthenticatedRequest);
+    requireBillingAdmin(user);
+    const { code } = promoValidateSchema.parse(req.body);
+    const result = await validatePromoCode(code, user.organizationId);
+    if (!result.valid) {
+      return res.status(400).json({ error: 'ValidationError', message: result.message ?? 'That promo code is not valid.' });
+    }
+    res.json({ valid: true, discountPercent: result.discountPercent ?? PROMO_DISCOUNT_PERCENT, code: PROMO_CODE });
+  } catch (error) {
+    next(error);
+  }
+});
+
 billingRouter.post('/checkout', async (req, res) => {
   const user = auth(req as AuthenticatedRequest);
   requireBillingAdmin(user);
   const body = checkoutSchema.parse(req.body);
-  res.status(201).json(await startCheckout(user, body.planCode, body.period, body.phone));
+  res.status(201).json(await startCheckout(user, body.planCode, body.period, body.phone, body.promoCode));
 });
 
 billingRouter.post('/subscription/change', async (req, res) => {
   const user = auth(req as AuthenticatedRequest);
   requireBillingAdmin(user);
   const body = checkoutSchema.parse(req.body);
-  res.status(201).json(await startCheckout(user, body.planCode, body.period, body.phone));
+  res.status(201).json(await startCheckout(user, body.planCode, body.period, body.phone, body.promoCode));
 });
 
 billingRouter.post('/checkout/verify', async (req, res) => {

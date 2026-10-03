@@ -162,7 +162,7 @@ The workspace default provider/model is selected per organization in **Settings 
 ```bash
 pnpm lint         # ESLint flat config (eslint.config.mjs), no-unused-vars etc.
 pnpm typecheck    # tsc --noEmit across api/web/worker/packages
-pnpm test         # vitest — 396 tests in apps/api/src/__tests__
+pnpm test         # vitest — 411 tests in apps/api/src/__tests__
 pnpm build        # prisma generate + tsc for api/worker/packages, next build for web
 pnpm db:generate  # prisma client
 pnpm db:migrate   # apply Prisma migrations
@@ -172,7 +172,7 @@ Project convention: **source files must not contain comments** — no `//`, no `
 
 ## Testing summary
 
-- 18 vitest files, **396 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, tool governance (system-admin-only gating, SQL/file-system guards, secret redaction, approval flags, search filters), system users overview builder, evaluator, regressions, billing (Cashfree signature verification, webhook idempotency, entitlements/quotas, plan-change settling), integrations (credential crypto, OAuth exchange, webhook signing/delivery, knowledge sync, widget routes, marketplace/admin guards), model providers (custom endpoint CRUD, encrypted API keys, endpoint URL guards, health probes, workspace routing and run fallback), customer support (CEO message send, per-user cooldown, admin inbox guards), HTTP server routes and agent marketplace (catalog browse/filter/sort, drafts, versions and rollback, review-queue approvals, one-click install with dependency report, paid entitlements, fork, preview runs, ratings, creator profiles and admin moderation).
+- 19 vitest files, **411 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, tool governance (system-admin-only gating, SQL/file-system guards, secret redaction, approval flags, search filters), system users overview builder, evaluator, regressions, billing (Cashfree signature verification, webhook idempotency, entitlements/quotas, plan-change settling), integrations (credential crypto, OAuth exchange, webhook signing/delivery, knowledge sync, widget routes, marketplace/admin guards), model providers (custom endpoint CRUD, encrypted API keys, endpoint URL guards, health probes, workspace routing and run fallback), customer support (CEO message send, per-user cooldown, admin inbox guards), HTTP server routes and agent marketplace (catalog browse/filter/sort, drafts, versions and rollback, review-queue approvals, one-click install with dependency report, paid entitlements, fork, preview runs, ratings, creator profiles and admin moderation), model usage analytics and the bring-your-own-provider promo (qualification gates, discounted Cashfree checkout, one-time code email).
 - Tests are hermetic (mocked Prisma/Redis) and run in CI after `pnpm db:generate`.
 - The worker/agent-runtime packages have no standalone unit tests; their behaviour is exercised through the API harness and the running stack.
 

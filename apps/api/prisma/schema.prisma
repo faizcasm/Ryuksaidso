@@ -76,6 +76,7 @@ model Organization {
   llmProvider String @default("OMNIROUTE")
   ollamaModel String @default("qwen2.5-coder:3b-instruct-q4_K_M")
   omnirouteModel String @default("")
+  promoCodeSentAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -228,6 +229,7 @@ model AgentRun {
   agentVersionId String?
   status RunStatus @default(QUEUED)
   provider String @default("OLLAMA")
+  model String @default("")
   trigger String @default("playground")
   environment String @default("development")
   input Json
