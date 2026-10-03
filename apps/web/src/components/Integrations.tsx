@@ -112,6 +112,7 @@ const PROVIDER_ICONS: Record<string, IconType> = {
   Zap,
   Workflow,
   Play,
+  Send,
 };
 
 type TokenField = {
@@ -131,6 +132,7 @@ type CatalogProvider = {
   color: string;
   icon: string;
   knowledge: boolean;
+  comingSoon: boolean;
   tools: string[];
   webhookEvents: string[];
   envKeys: string[];
@@ -729,7 +731,6 @@ export function IntegrationsView({
           {visibleProviders.map((provider) => {
             const Icon = PROVIDER_ICONS[provider.icon] ?? Plug;
             const connection = connByProvider.get(provider.key) ?? null;
-            const needsToken = provider.authType === "token";
             const isPreset = provider.authType === "webhook";
             return (
               <div
@@ -749,9 +750,14 @@ export function IntegrationsView({
                     ? statusPill("DISCONNECTED", "disabled")
                     : connection
                       ? statusPill(connection.status)
-                      : statusPill("PENDING", "not connected")}
+                      : provider.comingSoon
+                        ? statusPill("PENDING", "unconfigured")
+                        : statusPill("PENDING", "not connected")}
                 </div>
                 <p className="int-card-blurb">{provider.blurb}</p>
+                {provider.comingSoon && !connection && (
+                  <div className="int-soon">Unconfigured — working on it. Will be configured soon.</div>
+                )}
                 <div className="int-card-meta">
                   <span className={`pill ${provider.knowledge ? "ok" : "muted"}`}>
                     {provider.knowledge ? "knowledge sync" : "no sync"}
@@ -761,12 +767,12 @@ export function IntegrationsView({
                     <span className="pill muted">{provider.webhookEvents.length} events</span>
                   )}
                 </div>
-                {provider.authType === "oauth2" && !provider.configured && (
+                {!provider.comingSoon && provider.authType === "oauth2" && !provider.configured && (
                   <div className="int-hint">
                     {provider.setupHint || `Server env required: ${provider.envKeys.join(", ")}`}
                   </div>
                 )}
-                {provider.authType === "oauth2" && provider.redirectUri && !connection && (
+                {!provider.comingSoon && provider.authType === "oauth2" && provider.redirectUri && !connection && (
                   <div className="int-callback">
                     <span>Callback URL to register in {provider.name}&apos;s console</span>
                     <div className="int-callback-row">
@@ -810,12 +816,23 @@ export function IntegrationsView({
                         !!busy ||
                         !canManage ||
                         provider.disabled ||
+                        provider.comingSoon ||
                         (provider.authType === "oauth2" && !provider.configured)
                       }
-                      title={!canManage ? "Owners and admins only" : undefined}
+                      title={
+                        !canManage
+                          ? "Owners and admins only"
+                          : provider.comingSoon
+                            ? "Unconfigured — working on it, will be configured soon"
+                            : undefined
+                      }
                       onClick={() => startConnect(provider)}
                     >
-                      {busy === provider.key ? "Opening…" : needsToken ? "Connect" : "Connect"}
+                      {busy === provider.key
+                        ? "Opening…"
+                        : provider.comingSoon
+                          ? "Coming soon"
+                          : "Connect"}
                     </button>
                   )}
                 </div>

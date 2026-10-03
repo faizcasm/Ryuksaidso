@@ -582,6 +582,9 @@ export function BillingSection({ canManage }: { canManage: boolean }) {
           </span>
         </div>
       )}
+      {state && !state.configured && (
+        <div className="bill-note">Unconfigured for now — will be configured soon.</div>
+      )}
       {state && (
         <>
           <div className="billing-top">

@@ -253,10 +253,28 @@ describe('integration credential crypto', () => {
 });
 
 describe('provider catalog', () => {
-  it('exposes exactly 15 providers with unique keys', () => {
-    expect(INTEGRATION_PROVIDERS).toHaveLength(15);
+  it('exposes exactly 16 providers with unique keys', () => {
+    expect(INTEGRATION_PROVIDERS).toHaveLength(16);
     const keys = INTEGRATION_PROVIDERS.map((p) => p.key);
     expect(new Set(keys).size).toBe(keys.length);
+    const comingSoon = INTEGRATION_PROVIDERS.filter((p) => p.comingSoon).map((p) => p.key).sort();
+    expect(comingSoon).toEqual([
+      'gmail',
+      'google_drive',
+      'hubspot',
+      'jira',
+      'linear',
+      'notion',
+      'outlook',
+      'shopify',
+      'slack',
+      'telegram',
+    ]);
+    expect(INTEGRATION_PROVIDERS.find((p) => p.key === 'telegram')).toMatchObject({
+      authType: 'token',
+      category: 'messaging',
+      icon: 'Send',
+    });
   });
 
   it('configures every OAuth provider with endpoints, scopes, and two env keys', () => {
@@ -691,16 +709,22 @@ describe('integrations routes', () => {
     const response = await request(app).get('/api/integrations/catalog').set(auth(OWNER_TOKEN));
     expect(response.status).toBe(200);
     expect(response.body.enabled).toBe(true);
-    expect(response.body.providers).toHaveLength(15);
+    expect(response.body.providers).toHaveLength(16);
     const slack = response.body.providers.find((p: any) => p.key === 'slack');
     expect(slack.connected).toBe(true);
     expect(slack.status).toBe('CONNECTED');
+    expect(slack.comingSoon).toBe(true);
     const gmail = response.body.providers.find((p: any) => p.key === 'gmail');
     expect(gmail.connected).toBe(false);
     expect(gmail.configured).toBe(false);
+    expect(gmail.comingSoon).toBe(true);
     expect(gmail.redirectUri).toContain('/api/integrations/gmail/callback');
     expect(response.body.providers.find((p: any) => p.key === 'teams').redirectUri).toBeNull();
     expect(response.body.providers.find((p: any) => p.key === 'zapier').redirectUri).toBeNull();
+    const telegram = response.body.providers.find((p: any) => p.key === 'telegram');
+    expect(telegram.comingSoon).toBe(true);
+    expect(telegram.connected).toBe(false);
+    expect(telegram.tokenFields).toEqual([expect.objectContaining({ key: 'botToken', secret: true })]);
   });
 
   it('forbids non-owners from starting OAuth connect', async () => {

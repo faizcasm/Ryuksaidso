@@ -160,7 +160,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     cat: "Integrations",
     q: "Which integrations are supported?",
-    a: "Fifteen in the marketplace: Gmail, Google Drive, Outlook, Slack, Microsoft Teams, WhatsApp Business, Notion, GitHub, Jira, Linear, HubSpot, Shopify, Zapier, Make and n8n.",
+    a: "Sixteen in the marketplace: Gmail, Google Drive, Outlook, Slack, Microsoft Teams, WhatsApp Business, Notion, GitHub, Jira, Linear, HubSpot, Shopify, Zapier, Make, n8n and Telegram Bot. Gmail, Outlook, Slack, Google Drive, Notion, Jira, Linear, HubSpot, Shopify and Telegram Bot currently show as “unconfigured — working on it” cards while their setup is being finished.",
     link: { label: "Open the marketplace", href: "/docs" },
   },
   {

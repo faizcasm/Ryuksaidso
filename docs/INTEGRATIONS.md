@@ -4,7 +4,7 @@
 
 Ryuksaidso connects to the tools your team already uses. From **Integrations** in the dashboard you can:
 
-- connect Gmail, Outlook, Slack, Teams, WhatsApp, Google Drive, Notion, GitHub, Jira, Linear, HubSpot and Shopify through OAuth or a stored token,
+- connect Teams and WhatsApp Business with a stored token and GitHub over OAuth today; Gmail, Outlook, Slack, Google Drive, Notion, Jira, Linear, HubSpot, Shopify and Telegram Bot show as "unconfigured — working on it" cards until their setup lands,
 - sync Drive/Notion/GitHub content into the knowledge base automatically,
 - embed an AI chat widget on your website with one `<script>` tag,
 - send signed outbound webhooks to Zapier, Make, n8n or your own service,
@@ -16,7 +16,7 @@ Platform administrators get a master switch and per-provider kill switches (Admi
 
 | Term | What it means |
 |---|---|
-| **Provider** | A catalogue entry (15 of them) describing auth type, OAuth endpoints, env keys, agent tools, events and knowledge support. |
+| **Provider** | A catalogue entry (16 of them) describing auth type, OAuth endpoints, env keys, agent tools, events and knowledge support. |
 | **Connection** | One `(organizationId, provider)` row holding AES-256-GCM encrypted tokens, status, scopes and health timestamps. |
 | **Knowledge source** | A Drive folder, Notion database or GitHub repo path that is periodically pulled into `Document`s. |
 | **Chat widget** | A per-workspace public key + loader script that turns any website into an agent front end. |
@@ -33,6 +33,7 @@ Platform administrators get a master switch and per-provider kill switches (Admi
 | Slack | OAuth2 | list channels, send messages | — | `SLACK_CLIENT_ID/SECRET` |
 | Microsoft Teams | token (webhook URL, https-only) | send messages | — | — |
 | WhatsApp Business | token (access token + phone number id) | send messages | — | — |
+| Telegram Bot | token (bot token) | — (coming soon) | — | — |
 | Notion | OAuth2 | search/append pages | ✓ | `NOTION_CLIENT_ID/SECRET` |
 | GitHub | OAuth2 (env `GITHUB_TOKEN` fallback) | repo, issues, PRs, file tree | ✓ | `GITHUB_CLIENT_ID/SECRET`, `GITHUB_TOKEN` |
 | Jira | OAuth2 (Atlassian) | issues search/create/update | — | `ATLASSIAN_CLIENT_ID/SECRET` |
@@ -40,6 +41,8 @@ Platform administrators get a master switch and per-provider kill switches (Admi
 | HubSpot | OAuth2 | contacts/companies/deals | — | `HUBSPOT_CLIENT_ID/SECRET` |
 | Shopify | OAuth2 (store-domain templated) | products/orders | — | `SHOPIFY_CLIENT_ID/SECRET` |
 | Zapier / Make / n8n | webhook preset | — (creates an endpoint) | — | — |
+
+Providers flagged `comingSoon` in the catalog (Gmail, Outlook, Slack, Google Drive, Notion, Jira, Linear, HubSpot, Shopify and Telegram Bot) render with an "Unconfigured — working on it. Will be configured soon." badge and a disabled **Coming soon** button; their setup hints and callback URLs stay hidden until they are configured.
 
 Every OAuth provider additionally needs its redirect URI registered: `<API origin>/api/integrations/<provider>/callback` (set `API_PUBLIC_URL` to pin the origin). Until it is registered the provider rejects the consent redirect with `400 redirect_uri_mismatch` — each marketplace card prints the exact callback URL with a copy button so you can paste it into the provider console first.
 

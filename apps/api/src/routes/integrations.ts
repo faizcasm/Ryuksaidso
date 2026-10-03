@@ -87,6 +87,7 @@ integrationsRouter.get('/catalog', async (req, res, next) => {
           color: provider.color,
           icon: provider.icon,
           knowledge: Boolean(provider.knowledge),
+          comingSoon: Boolean(provider.comingSoon),
           tools: provider.tools,
           webhookEvents: provider.webhookEvents ?? [],
           envKeys: provider.envKeys,

@@ -27,6 +27,7 @@ export type ProviderDef = {
   color: string;
   icon: string;
   knowledge?: boolean;
+  comingSoon?: boolean;
   oauth?: OAuthConfig;
   tokenFields?: Array<{ key: string; label: string; placeholder?: string; secret?: boolean }>;
   webhookEvents?: string[];
@@ -38,6 +39,7 @@ const googleProfile = (data: any) => ({ name: String(data?.name ?? ''), email: S
 export const INTEGRATION_PROVIDERS: ProviderDef[] = [
   {
     key: 'gmail',
+    comingSoon: true,
     name: 'Gmail',
     category: 'email',
     authType: 'oauth2',
@@ -60,6 +62,7 @@ export const INTEGRATION_PROVIDERS: ProviderDef[] = [
   },
   {
     key: 'outlook',
+    comingSoon: true,
     name: 'Outlook / Microsoft 365',
     category: 'email',
     authType: 'oauth2',
@@ -82,6 +85,7 @@ export const INTEGRATION_PROVIDERS: ProviderDef[] = [
   },
   {
     key: 'slack',
+    comingSoon: true,
     name: 'Slack',
     category: 'messaging',
     authType: 'oauth2',
@@ -132,7 +136,24 @@ export const INTEGRATION_PROVIDERS: ProviderDef[] = [
     tools: ['whatsapp_send_message'],
   },
   {
+    key: 'telegram',
+    name: 'Telegram Bot',
+    category: 'messaging',
+    authType: 'token',
+    comingSoon: true,
+    blurb: 'Send alerts and reply to users through a Telegram bot from tickets, agents and workflows.',
+    website: 'https://telegram.org',
+    envKeys: [],
+    color: '#229ED9',
+    icon: 'Send',
+    tokenFields: [
+      { key: 'botToken', label: 'Bot token', placeholder: '123456789:ABC-DEF...', secret: true },
+    ],
+    tools: [],
+  },
+  {
     key: 'google_drive',
+    comingSoon: true,
     name: 'Google Drive',
     category: 'knowledge',
     authType: 'oauth2',
@@ -156,6 +177,7 @@ export const INTEGRATION_PROVIDERS: ProviderDef[] = [
   },
   {
     key: 'notion',
+    comingSoon: true,
     name: 'Notion',
     category: 'knowledge',
     authType: 'oauth2',
@@ -201,6 +223,7 @@ export const INTEGRATION_PROVIDERS: ProviderDef[] = [
   },
   {
     key: 'jira',
+    comingSoon: true,
     name: 'Jira',
     category: 'project',
     authType: 'oauth2',
@@ -223,6 +246,7 @@ export const INTEGRATION_PROVIDERS: ProviderDef[] = [
   },
   {
     key: 'linear',
+    comingSoon: true,
     name: 'Linear',
     category: 'project',
     authType: 'oauth2',
@@ -244,6 +268,7 @@ export const INTEGRATION_PROVIDERS: ProviderDef[] = [
   },
   {
     key: 'hubspot',
+    comingSoon: true,
     name: 'HubSpot',
     category: 'crm',
     authType: 'oauth2',
@@ -265,6 +290,7 @@ export const INTEGRATION_PROVIDERS: ProviderDef[] = [
   },
   {
     key: 'shopify',
+    comingSoon: true,
     name: 'Shopify',
     category: 'commerce',
     authType: 'oauth2',

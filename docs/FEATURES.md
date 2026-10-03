@@ -119,7 +119,7 @@
 
 ## Integrations and automation
 
-- 15-provider marketplace: Gmail, Google Drive, Outlook, Slack, Microsoft Teams, WhatsApp Business, Notion, GitHub, Jira, Linear, HubSpot, Shopify, Zapier, Make and n8n
+- 16-provider marketplace: Gmail, Google Drive, Outlook, Slack, Microsoft Teams, WhatsApp Business, Notion, GitHub, Jira, Linear, HubSpot, Shopify, Zapier, Make, n8n and Telegram Bot — Gmail, Outlook, Slack, Google Drive, Notion, Jira, Linear, HubSpot, Shopify and Telegram Bot currently show as "unconfigured — working on it" cards until their setup lands
 - OAuth 2.0 connection system (authorize URL builder, code exchange, refresh with skew, per-provider probes) with signed short-lived state in Redis
 - Credentials encrypted at rest with AES-256-GCM keyed from `JWT_SECRET`; summaries and responses never expose tokens
 - Token-type connections for Microsoft Teams (incoming-webhook URL, https-only) and WhatsApp Business (access token + phone number id)

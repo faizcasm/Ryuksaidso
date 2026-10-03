@@ -553,6 +553,7 @@ html[data-theme='light'] .obs-rid{color:#0369a1}
 .int-card-title b{font-size:12px}
 .int-card-title span{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
 .int-card-blurb{margin:0;font-size:10px;color:var(--muted);line-height:1.55}
+.int-soon{margin-top:8px;padding:7px 9px;border-radius:8px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.26);color:#f2c46a;font-size:9.5px;font-weight:700;letter-spacing:.03em;line-height:1.5}
 .int-card-meta{display:flex;gap:6px;flex-wrap:wrap}
 .int-card-foot{display:flex;gap:8px;margin-top:auto;padding-top:4px}
 .int-card-foot .primary{flex:1}
