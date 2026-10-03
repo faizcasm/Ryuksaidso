@@ -220,3 +220,97 @@ export const modelProviderDiscoverSchema = z.object({
 export const supportMessageSchema = z.object({
   message: z.string().trim().min(10).max(4000)
 });
+
+export const MARKETPLACE_CATEGORIES = ['support','sales','marketing','research','productivity','development','operations','other'] as const;
+export const MARKETPLACE_PRICING = ['FREE','PAID','USAGE'] as const;
+export const MARKETPLACE_PRICE_PERIODS = ['MONTHLY','YEARLY','ONE_TIME'] as const;
+
+const marketplaceToolList = z.array(z.string().trim().regex(/^[a-z0-9_]+$/).max(80)).max(50);
+const marketplaceKeyList = z.array(z.string().trim().regex(/^[a-z0-9_:-]+$/).max(80)).max(32);
+
+export const marketplaceConfigSchema = z.object({
+  instructions: z.string().trim().min(10).max(20_000),
+  systemPrompt: z.string().trim().max(30_000).optional(),
+  tools: marketplaceToolList.default([])
+});
+
+export const marketplaceListQuerySchema = z.object({
+  q: z.string().trim().max(80).optional(),
+  category: z.enum(MARKETPLACE_CATEGORIES).optional(),
+  pricing: z.enum(MARKETPLACE_PRICING).optional(),
+  sort: z.enum(['popular','rating','newest','name']).default('newest'),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+  limit: z.coerce.number().int().min(1).max(24).default(12)
+});
+
+export const marketplaceCreateSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80).optional(),
+  summary: z.string().trim().min(10).max(240),
+  description: z.string().trim().min(20).max(6000),
+  category: z.enum(MARKETPLACE_CATEGORIES),
+  logoIcon: z.string().trim().regex(/^[a-z0-9-]+$/).max(40).default('sparkles'),
+  logoColor: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).default('#7c5cff'),
+  pricing: z.enum(MARKETPLACE_PRICING).default('FREE'),
+  priceAmount: z.coerce.number().int().min(0).max(100_000_000).default(0),
+  pricePeriod: z.enum(MARKETPLACE_PRICE_PERIODS).default('MONTHLY'),
+  pricePerRun: z.coerce.number().int().min(0).max(10_000_000).default(0),
+  avgCostMicros: z.coerce.number().int().min(0).max(1_000_000_000).default(0),
+  requiredIntegrations: marketplaceKeyList.default([]),
+  requiredModels: marketplaceKeyList.default([]),
+  permissions: marketplaceKeyList.default([]),
+  config: marketplaceConfigSchema
+});
+
+export const marketplaceUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(80).optional(),
+  summary: z.string().trim().min(10).max(240).optional(),
+  description: z.string().trim().min(20).max(6000).optional(),
+  category: z.enum(MARKETPLACE_CATEGORIES).optional(),
+  logoIcon: z.string().trim().regex(/^[a-z0-9-]+$/).max(40).optional(),
+  logoColor: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  pricing: z.enum(MARKETPLACE_PRICING).optional(),
+  priceAmount: z.coerce.number().int().min(0).max(100_000_000).optional(),
+  pricePeriod: z.enum(MARKETPLACE_PRICE_PERIODS).optional(),
+  pricePerRun: z.coerce.number().int().min(0).max(10_000_000).optional(),
+  avgCostMicros: z.coerce.number().int().min(0).max(1_000_000_000).optional(),
+  requiredIntegrations: marketplaceKeyList.optional(),
+  requiredModels: marketplaceKeyList.optional(),
+  permissions: marketplaceKeyList.optional(),
+  config: marketplaceConfigSchema.optional()
+});
+
+export const marketplaceVersionSchema = z.object({
+  config: marketplaceConfigSchema,
+  changelog: z.string().trim().max(1200).default('')
+});
+
+export const marketplaceRollbackSchema = z.object({
+  version: z.coerce.number().int().min(1)
+});
+
+export const marketplaceReviewSchema = z.object({
+  rating: z.coerce.number().int().min(1).max(5),
+  title: z.string().trim().max(160).default(''),
+  body: z.string().trim().max(3000).default('')
+});
+
+export const marketplaceTrySchema = z.object({
+  message: z.string().trim().min(1).max(4000)
+});
+
+export const marketplaceAdminReviewSchema = z.object({
+  action: z.enum(['approve','reject']),
+  reason: z.string().trim().max(1200).default('')
+});
+
+export const marketplaceModerateSchema = z.object({
+  verified: z.boolean().optional(),
+  featured: z.boolean().optional(),
+  suspend: z.boolean().optional()
+});
+
+export const marketplaceCreatorModerateSchema = z.object({
+  verified: z.boolean()
+});

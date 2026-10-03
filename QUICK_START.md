@@ -73,7 +73,7 @@ Create a workspace at http://localhost:3000 (the first account becomes OWNER of 
 ```bash
 pnpm lint        # ESLint flat config
 pnpm typecheck   # tsc --noEmit, all workspaces
-pnpm test        # vitest — 323 tests (apps/api/src/__tests__)
+pnpm test        # vitest — 392 tests (apps/api/src/__tests__)
 pnpm build       # prisma + tsc + next build
 ```
 

@@ -134,6 +134,21 @@
 - Admin controls: platform-wide enable switch and per-provider kill switches, platform overview, cross-workspace integration logs
 - Master switch semantics: disabling integrations blocks connects, agent tools and syncs; org webhook endpoints and the chat widget keep working
 
+## Agent marketplace
+
+- Full discovery experience: keyword search, category / pricing / sort filters, pagination, featured and verified badges, creator profiles with handle, bio and aggregate stats
+- Rich agent cards and detail pages: one-line pitch, logo/icon palette, rating stars, install and try counts, pricing chip (Free / from-INR per seat / per run), requirements panel (integrations, models, permissions) and a rendered description
+- One-click install: duplicates the agent's `AgentVersion` into your workspace as a real Agent, quota-gated (`agents`), with a dependency report (`missing.integrations`, `missing.tools`, `modelReady`); paid agents return 402 `PaymentRequired` on the free plan and fail open where billing is not enforced
+- Try before you install: a sandboxed preview run (`trigger: marketplace`, 30-second Redis cooldown that fails open) that materializes a `try-<slug>` agent, enqueues through the normal queue and streams the answer back into an in-page chat
+- Fork: any published agent can be forked into your workspace as an editable draft copy, linked via `forkedFromId`
+- Publishing workflow: DRAFT → submit (IN_REVIEW) → admin approve (PUBLISHED) or reject with a reason; edits to a published agent's metadata land immediately, config changes go through immutable versions (`version` + `config` snapshots); PATCH while in review reverts to DRAFT; rollback repoints `currentVersionId`
+- Version history: per-agent `MarketplaceAgentVersion` rows with notes, author, created-at and current flag, plus an admin rollback
+- Reviews and ratings: 1–5 star rating with title and body, unique per user per agent (`@@unique([agentId, userId])`), rolling average and histogram shown on the detail page
+- Creator profiles: `/creators/:handle` aggregates verified badge, agent counts, total installs and executions; the official `@ryuksaidso` creator is seeded and non-editable by users, admin-moderatable only
+- Owner analytics: per-agent executions, success rate, tokens and install counts computed read-time from `AgentRun` — no worker changes
+- Moderation: admin review queue, per-agent suspend/feature/unfeature (`suspended` flag hides from browse), creator verify/suspend, all audit-logged
+- Seeded with six production-grade sample agents (inbox-triage, meeting-brief, research-radar, bug-triage, lead-followup, social-drafter) across FREE/PAID/USAGE pricing
+
 ## Customer support
 
 - Direct-to-CEO channel: a headset icon in the top bar (with a live green indicator) opens a polished modal — CEO identity card with verified badge, "Send your message to CEO…" textarea, live character counter, min-length hint and a delivery confirmation state

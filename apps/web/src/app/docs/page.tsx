@@ -26,6 +26,7 @@ import {
   Search,
   Shield,
   Sparkles,
+  Store,
   TestTube2,
   Workflow,
   X,
@@ -743,6 +744,95 @@ Content-Type: application/json
             <>System admins get a platform-wide switch plus per-provider kill switches (Admin → Integrations).</>,
             <>Off means no connects, no integration agent tools and no syncs — stored credentials stay put.</>,
             <>Platform overview: connection health, source status, 24-hour delivery success and a cross-workspace error feed.</>,
+          ]}
+        />
+      </>
+    ),
+  },
+  {
+    id: "marketplace",
+    title: "Agent marketplace",
+    kicker: "Discover, install and publish agents",
+    icon: Store,
+    group: "Core concepts",
+    toc: ["Browse and install", "Try before you install", "Publishing workflow", "Reviews and versions", "Moderation"],
+    keywords: "marketplace agents discover browse install fork try preview publish creator verified badge rating review version rollback dependencies quota paid",
+    body: (
+      <>
+        <Lead>
+          The marketplace is where workspace-ready agents are discovered and
+          shipped: browse a public catalog, check what an agent needs before
+          you commit, try it in a sandbox, install it in one click — or publish
+          your own through a review queue with versions, ratings and rollback.
+        </Lead>
+
+        <H>Browse and install</H>
+        <Endpoints
+          items={[
+            ["GET", "/api/marketplace/agents", "Catalog with q / category / pricing / sort / limit / offset filters."],
+            ["GET", "/api/marketplace/agents/:slug", "Full detail — requirements, versions, reviews; owners also see drafts."],
+            ["POST", "/api/marketplace/agents/:slug/install", "One-click install: clones the current version into your workspace, returns a dependency report."],
+            ["POST", "/api/marketplace/agents/:slug/fork", "Forks a published agent into your workspace as an editable draft."],
+            ["GET", "/api/marketplace/installs", "Your installs with their linked workspace agents."],
+            ["GET", "/api/marketplace/creators/:handle", "Creator profile: verified badge, agents, installs and executions."],
+          ]}
+        />
+        <Bullets
+          items={[
+            <>Install is quota-gated (<code>agents</code>) and refuses duplicates with 409.</>,
+            <>Paid agents return <code>402 PaymentRequired</code> on the free plan; where billing is not enforced the gate fails open.</>,
+            <>The response reports <code>missing.integrations</code>, <code>missing.tools</code> and <code>modelReady</code> so the UI can send you to Integrations.</>,
+          ]}
+        />
+
+        <H>Try before you install</H>
+        <Code
+          lang="http"
+          code={`POST /api/marketplace/agents/:slug/try
+Content-Type: application/json
+
+{ "message": "Triage my unread inbox" }`}
+        />
+        <Bullets
+          items={[
+            <>Materializes a sandbox <code>try-&lt;slug&gt;</code> agent, enqueues a normal run (<code>trigger: marketplace</code>) and returns <code>{"202 { runId, jobId }"}</code>.</>,
+            <>A 30-second per-user Redis cooldown returns 429 and fails open if Redis is down.</>,
+            <>The dashboard polls runs and renders the answer in an in-page chat — no install required.</>,
+          ]}
+        />
+
+        <H>Publishing workflow</H>
+        <Steps
+          items={[
+            { title: "Draft", body: "POST /api/marketplace/agents — name, slug, category, pricing, config, requirements." },
+            { title: "Submit", body: "POST /agents/:slug/submit moves it to IN_REVIEW; edits while in review revert it to DRAFT." },
+            { title: "Review", body: "Admins approve (PUBLISHED) or reject with a reason: POST /api/admin/marketplace/agents/:id/review." },
+            { title: "Ship versions", body: "Config changes go through POST /agents/:slug/versions — immutable snapshots you can roll back." },
+          ]}
+        />
+
+        <H>Reviews and versions</H>
+        <Endpoints
+          items={[
+            ["POST", "/api/marketplace/agents/:slug/reviews", "1–5 stars with title/body — one review per user per agent."],
+            ["GET", "/api/marketplace/agents/:slug/versions", "Version history with notes, author and current flag."],
+            ["POST", "/api/marketplace/agents/:slug/rollback", "Owner: repoint currentVersionId to any earlier version."],
+            ["GET", "/api/marketplace/agents/:slug/analytics", "Owner: executions, success rate, tokens and installs, computed read-time."],
+          ]}
+        />
+
+        <H>Moderation</H>
+        <Endpoints
+          items={[
+            ["GET", "/api/admin/marketplace/queue", "Review queue with creator info."],
+            ["POST", "/api/admin/marketplace/agents/:id/moderate", "Suspend / restore / feature an agent (suspension hides it from browse)."],
+            ["POST", "/api/admin/marketplace/creators/:userId/moderate", "Verify or suspend a creator."],
+          ]}
+        />
+        <Bullets
+          items={[
+            <>Admin routes require a session with <code>requireAdmin</code>; API keys are rejected.</>,
+            <>Every approval, rejection and moderation action is audit-logged.</>,
           ]}
         />
       </>

@@ -26,9 +26,10 @@ The original support-workspace codebase has been reworked into a multi-tenant pl
 - Run retry flow that creates a new persisted run instead of mutating history.
 - Knowledge documents stored in PostgreSQL with organization-scoped retrieval.
 - Evaluation endpoint for persisted regression datasets and pass/fail scores.
+- Agent marketplace: searchable public catalog with category/pricing filters, creator profiles and verified badges, one-click install with dependency reports and paid-plan gating, try-before-you-install preview runs, fork, star reviews, versioned publishing through an admin review queue with rollback and moderation.
 - Prometheus metrics, Loki logs, health/readiness endpoints and Grafana provisioning.
 - Admin-gated observability: a live Admin section and `get_observability_summary` / `get_recent_errors` / `search_request_logs` / `prometheus_query` / `loki_query` tools backed by the API-native request/log ring buffer (auto-detects Prometheus and Loki when the stack runs), with secret redaction and audit-logged executions.
-- Responsive control-plane UI for dashboard, run lab, agent registry, projects, tickets, traces, evaluations, approvals, knowledge, policies, developer keys and admin analytics.
+- Responsive control-plane UI for dashboard, run lab, agent registry, projects, tickets, traces, evaluations, approvals, knowledge, policies, marketplace, developer keys and admin analytics.
 
 ## Monorepo layout
 
@@ -161,7 +162,7 @@ The workspace default provider/model is selected per organization in **Settings 
 ```bash
 pnpm lint         # ESLint flat config (eslint.config.mjs), no-unused-vars etc.
 pnpm typecheck    # tsc --noEmit across api/web/worker/packages
-pnpm test         # vitest — 323 tests in apps/api/src/__tests__
+pnpm test         # vitest — 392 tests in apps/api/src/__tests__
 pnpm build        # prisma generate + tsc for api/worker/packages, next build for web
 pnpm db:generate  # prisma client
 pnpm db:migrate   # apply Prisma migrations
@@ -171,7 +172,7 @@ Project convention: **source files must not contain comments** — no `//`, no `
 
 ## Testing summary
 
-- 17 vitest files, **323 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, tool governance (system-admin-only gating, SQL/file-system guards, secret redaction, approval flags, search filters), system users overview builder, evaluator, regressions, billing (Cashfree signature verification, webhook idempotency, entitlements/quotas, plan-change settling), integrations (credential crypto, OAuth exchange, webhook signing/delivery, knowledge sync, widget routes, marketplace/admin guards), model providers (custom endpoint CRUD, encrypted API keys, endpoint URL guards, health probes, workspace routing and run fallback), customer support (CEO message send, per-user cooldown, admin inbox guards) and HTTP server routes.
+- 18 vitest files, **392 tests**, all green: validation schemas, auth helpers (bcrypt round trips), middleware (CSRF, API-key and admin gates), config/provider normalization, LLM fallback behaviour, agent tools, tool governance (system-admin-only gating, SQL/file-system guards, secret redaction, approval flags, search filters), system users overview builder, evaluator, regressions, billing (Cashfree signature verification, webhook idempotency, entitlements/quotas, plan-change settling), integrations (credential crypto, OAuth exchange, webhook signing/delivery, knowledge sync, widget routes, marketplace/admin guards), model providers (custom endpoint CRUD, encrypted API keys, endpoint URL guards, health probes, workspace routing and run fallback), customer support (CEO message send, per-user cooldown, admin inbox guards), HTTP server routes and agent marketplace (catalog browse/filter/sort, drafts, versions and rollback, review-queue approvals, one-click install with dependency report, paid entitlements, fork, preview runs, ratings, creator profiles and admin moderation).
 - Tests are hermetic (mocked Prisma/Redis) and run in CI after `pnpm db:generate`.
 - The worker/agent-runtime packages have no standalone unit tests; their behaviour is exercised through the API harness and the running stack.
 

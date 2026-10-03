@@ -45,6 +45,7 @@ import {
   Shield,
   ShieldCheck,
   Sparkles,
+  Store,
   Sun,
   TestTube2,
   Ticket,
@@ -68,6 +69,7 @@ import {
   type SupportInbox,
 } from "./CeoSupport";
 import { IntegrationsView } from "./Integrations";
+import { MarketplaceView } from "./Marketplace";
 import { ModelProvidersSection } from "./ModelProviders";
 
 type User = {
@@ -399,6 +401,7 @@ const mainNav: Array<[string, IconType]> = [
   ["Docs", Globe2],
   ["Architecture", Layers3],
   ["Integrations", Plug],
+  ["Marketplace", Store],
   ["Settings", Settings2],
 ];
 
@@ -1678,6 +1681,13 @@ export default function AppShell() {
               canManage={canManageWorkspace}
               systemRole={user?.userRole ?? null}
               agents={agents}
+            />
+          )}
+          {tab === "Marketplace" && (
+            <MarketplaceView
+              canManage={canManageWorkspace}
+              systemRole={user?.userRole ?? null}
+              onGoIntegrations={() => setTab("Integrations")}
             />
           )}
           {tab === "Settings" && (

@@ -780,3 +780,103 @@ model SupportMessage {
   createdAt DateTime @default(now())
   @@index([createdAt])
 }
+
+model MarketplaceCreator {
+  id String @id @default(cuid())
+  userId String?
+  handle String
+  displayName String
+  bio String @default("")
+  website String @default("")
+  verified Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([handle])
+  @@index([userId])
+}
+
+model MarketplaceAgent {
+  id String @id @default(cuid())
+  slug String
+  name String
+  summary String
+  description String
+  category String
+  logoIcon String @default("sparkles")
+  logoColor String @default("#7c5cff")
+  visibility String @default("PRIVATE")
+  status String @default("DRAFT")
+  suspended Boolean @default(false)
+  reviewReason String @default("")
+  pricing String @default("FREE")
+  priceAmount Int @default(0)
+  pricePeriod String @default("MONTHLY")
+  pricePerRun Int @default(0)
+  avgCostMicros Int @default(0)
+  creatorId String
+  organizationId String
+  currentVersion Int @default(1)
+  latestVersion Int @default(1)
+  verified Boolean @default(false)
+  featured Boolean @default(false)
+  installs Int @default(0)
+  tries Int @default(0)
+  ratingAvg Float @default(0)
+  ratingCount Int @default(0)
+  config Json
+  changelog String @default("")
+  requiredIntegrations String[]
+  requiredModels String[]
+  permissions String[]
+  forkedFromId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([slug])
+  @@index([status, visibility, createdAt])
+  @@index([organizationId, status])
+  @@index([creatorId])
+  @@index([category, pricing])
+}
+
+model MarketplaceAgentVersion {
+  id String @id @default(cuid())
+  agentId String
+  version Int
+  config Json
+  changelog String @default("")
+  createdBy String @default("")
+  createdAt DateTime @default(now())
+  @@unique([agentId, version])
+  @@index([agentId, createdAt])
+}
+
+model MarketplaceReview {
+  id String @id @default(cuid())
+  agentId String
+  userId String
+  userName String @default("")
+  rating Int
+  title String @default("")
+  body String @default("")
+  version Int @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([agentId, userId])
+  @@index([agentId, createdAt])
+}
+
+model MarketplaceInstall {
+  id String @id @default(cuid())
+  agentId String
+  organizationId String
+  userId String
+  installedAgentId String?
+  version Int @default(1)
+  source String @default("INSTALL")
+  status String @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([organizationId, status, createdAt])
+  @@index([agentId, organizationId])
+  @@index([installedAgentId])
+}
