@@ -2,12 +2,19 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRight, ShieldCheck } from "lucide-react";
+import { SITE_NAME } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
   description:
     "How RYUKSAIDSO collects, uses, stores and protects your personal information — accounts, agent runs, connected integrations, payments and your privacy rights.",
   alternates: { canonical: "/privacy" },
+  openGraph: {
+    url: "/privacy",
+    title: `Privacy Policy · ${SITE_NAME}`,
+    description:
+      "How RYUKSAIDSO collects, uses, stores and protects your personal information — accounts, agent runs, connected integrations, payments and your privacy rights.",
+  },
 };
 
 function Section({

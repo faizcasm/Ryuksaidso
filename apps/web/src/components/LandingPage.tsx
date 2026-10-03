@@ -12,19 +12,30 @@ import {
   CheckCircle2,
   Copy,
   Database,
+  Facebook,
   FileSearch,
   GitBranch,
+  Instagram,
   Layers3,
+  Linkedin,
   Menu,
   Play,
   ShieldCheck,
   Sparkles,
   TestTube2,
+  Twitter,
   Workflow,
   X,
   Zap,
 } from "lucide-react";
-import { FOUNDER_URL } from "@/lib/site";
+import { FOUNDER_URL, SOCIALS } from "@/lib/site";
+
+const SOCIAL_ICONS: Record<string, typeof Instagram> = {
+  Instagram,
+  Facebook,
+  X: Twitter,
+  LinkedIn: Linkedin,
+};
 
 function HeroCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -994,6 +1005,23 @@ export default function LandingPage() {
           <Link href="/privacy">Privacy</Link>
           <Link href="/auth">Sign in</Link>
         </nav>
+        <div className="footer-social">
+          {SOCIALS.map((social) => {
+            const Icon = SOCIAL_ICONS[social.name];
+            return (
+              <a
+                key={social.name}
+                href={social.url}
+                target="_blank"
+                rel="me noopener noreferrer"
+                aria-label={social.name}
+                title={social.name}
+              >
+                <Icon size={14} />
+              </a>
+            );
+          })}
+        </div>
         <small>
           © {new Date().getFullYear()} RYUKSAIDSO · Founded by{" "}
           <a href={FOUNDER_URL} target="_blank" rel="noopener noreferrer">
@@ -2046,6 +2074,25 @@ export default function LandingPage() {
         }
         .site-footer nav a:hover {
           color: var(--text);
+        }
+        .footer-social {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .footer-social a {
+          display: grid;
+          place-items: center;
+          width: 28px;
+          height: 28px;
+          border: 1px solid var(--line);
+          border-radius: 8px;
+          color: var(--muted);
+          background: rgba(255, 255, 255, 0.03);
+        }
+        .footer-social a:hover {
+          color: var(--text);
+          background: rgba(255, 255, 255, 0.07);
         }
         .site-footer small {
           width: 100%;

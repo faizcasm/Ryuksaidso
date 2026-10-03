@@ -8,6 +8,7 @@ import {
   SITE_NAME,
   SITE_TAGLINE,
   SITE_URL,
+  SOCIALS,
 } from '@/lib/site';
 
 export const metadata: Metadata = {
@@ -26,13 +27,16 @@ const jsonLd = {
       '@type': 'Organization',
       '@id': `${SITE_URL}/#organization`,
       name: SITE_NAME,
+      alternateName: 'Ryuksaidso',
       url: `${SITE_URL}/`,
       logo: `${SITE_URL}/icon.png`,
+      sameAs: SOCIALS.map((social) => social.url),
       founder: {
         '@type': 'Person',
         name: FOUNDER,
         alternateName: FOUNDER_HANDLE,
         url: FOUNDER_URL,
+        sameAs: [FOUNDER_URL],
       },
     },
     {

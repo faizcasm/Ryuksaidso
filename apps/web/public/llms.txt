@@ -1,0 +1,22 @@
+# RYUKSAIDSO
+
+> RYUKSAIDSO is an agent reliability and control plane for production AI agents: durable traces, policy gates, human approvals, evaluations, version rollback and multi-provider failover in one platform.
+
+RYUKSAIDSO lets teams plan, trace, approve, evaluate and roll back production AI agent runs with evidence instead of crossed fingers. Founded by Faizan Hameed (Faizcasm).
+
+## Product
+
+- [Home](https://ryuksaidso.faizcasm.me/): overview of the control plane
+- [Documentation](https://ryuksaidso.faizcasm.me/docs): quickstart, environment reference, API guide, auth and production hardening
+- [FAQ](https://ryuksaidso.faizcasm.me/faq): 60+ answers about traces, approvals, integrations, model providers, pricing and security
+- [Pricing](https://ryuksaidso.faizcasm.me/pricing): Free, Starter, Pro and Business plans
+- [Architecture](https://ryuksaidso.faizcasm.me/architecture): interactive 3D system architecture
+- [Playground](https://ryuksaidso.faizcasm.me/playground): deterministic in-browser simulation of the control plane
+
+## Company
+
+- Website: https://ryuksaidso.faizcasm.me
+- X: https://x.com/ryuksaidso
+- Instagram: https://www.instagram.com/ryuksaidso
+- Facebook: https://www.facebook.com/ryuksaidso
+- LinkedIn: https://www.linkedin.com/company/ryuksaidso

@@ -1,6 +1,14 @@
 import './globals.css';
 import type { ReactNode } from 'react';
-import { FOUNDER, FOUNDER_HANDLE, SITE_DESCRIPTION, SITE_NAME, SITE_URL, SITE_TAGLINE } from '@/lib/site';
+import {
+  FOUNDER,
+  FOUNDER_HANDLE,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_URL,
+  SITE_TAGLINE,
+  TWITTER_HANDLE,
+} from '@/lib/site';
 
 export const metadata = {
   metadataBase: new URL(SITE_URL),
@@ -40,6 +48,8 @@ export const metadata = {
   },
   twitter: {
     card: 'summary_large_image',
+    site: TWITTER_HANDLE,
+    creator: TWITTER_HANDLE,
     title: `${SITE_NAME} — ${SITE_TAGLINE}`,
     description: SITE_DESCRIPTION,
   },

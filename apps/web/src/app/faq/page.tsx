@@ -3,12 +3,19 @@ import Link from "next/link";
 import { ArrowRight, CircleHelp } from "lucide-react";
 import FaqExplorer from "@/components/Faq";
 import { FAQ_ITEMS } from "@/lib/faq";
+import { SITE_NAME } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "FAQ",
   description:
     "Answers to 60+ frequently asked questions about RYUKSAIDSO — what the agent control plane is, who founded it, traces, approvals, integrations, model providers, pricing, security and support.",
   alternates: { canonical: "/faq" },
+  openGraph: {
+    url: "/faq",
+    title: `FAQ · ${SITE_NAME}`,
+    description:
+      "Answers to 60+ frequently asked questions about RYUKSAIDSO — traces, approvals, integrations, model providers, pricing, security and support.",
+  },
 };
 
 const jsonLd = {
