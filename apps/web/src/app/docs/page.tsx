@@ -825,6 +825,7 @@ Content-Type: application/json
         <Endpoints
           items={[
             ["GET", "/api/admin/marketplace/queue", "Review queue with creator info."],
+            ["GET", "/api/admin/marketplace/agents", "Every marketplace agent with moderation flags — status, suspend/feature/verified, counters."],
             ["POST", "/api/admin/marketplace/agents/:id/moderate", "Suspend / restore / feature an agent (suspension hides it from browse)."],
             ["POST", "/api/admin/marketplace/creators/:userId/moderate", "Verify or suspend a creator."],
           ]}

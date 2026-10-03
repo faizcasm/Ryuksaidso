@@ -1041,6 +1041,59 @@ marketplaceAdminRouter.get('/queue', async (req, res, next) => {
   }
 });
 
+marketplaceAdminRouter.get('/agents', async (req, res, next) => {
+  try {
+    const statusParam = typeof req.query.status === 'string' ? req.query.status.toUpperCase() : '';
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const where: Prisma.MarketplaceAgentWhereInput = {};
+    if (['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'REJECTED'].includes(statusParam)) {
+      where.status = statusParam as MarketplaceAgent['status'];
+    }
+    if (q) {
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' as const } },
+        { slug: { contains: q, mode: 'insensitive' as const } }
+      ];
+    }
+    const rows = await prisma.marketplaceAgent.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take: 100
+    });
+    const creatorIds = [...new Set(rows.map((row) => row.creatorId))];
+    const creators = creatorIds.length
+      ? await prisma.marketplaceCreator.findMany({ where: { id: { in: creatorIds } } })
+      : [];
+    const creatorById = new Map(creators.map((creator) => [creator.id, creator]));
+    res.json(
+      rows.map((row) => ({
+        id: row.id,
+        slug: row.slug,
+        name: row.name,
+        status: row.status,
+        suspended: row.suspended,
+        verified: row.verified,
+        featured: row.featured,
+        category: row.category,
+        pricing: row.pricing,
+        logoIcon: row.logoIcon,
+        logoColor: row.logoColor,
+        installs: row.installs,
+        tries: row.tries,
+        ratingAvg: row.ratingAvg,
+        ratingCount: row.ratingCount,
+        organizationId: row.organizationId,
+        creator: creatorById.get(row.creatorId)
+          ? { id: creatorById.get(row.creatorId)!.id, handle: creatorById.get(row.creatorId)!.handle, displayName: creatorById.get(row.creatorId)!.displayName, verified: creatorById.get(row.creatorId)!.verified }
+          : null,
+        updatedAt: row.updatedAt
+      }))
+    );
+  } catch (error) {
+    next(error);
+  }
+});
+
 marketplaceAdminRouter.post('/agents/:id/review', async (req, res, next) => {
   try {
     const u = user(req);
@@ -1093,11 +1146,13 @@ marketplaceAdminRouter.get('/creators', async (req, res, next) => {
   }
 });
 
-marketplaceAdminRouter.post('/creators/:userId/moderate', async (req, res, next) => {
+marketplaceAdminRouter.post('/creators/:id/moderate', async (req, res, next) => {
   try {
     const u = user(req);
     const body = marketplaceCreatorModerateSchema.parse(req.body);
-    const creator = await prisma.marketplaceCreator.findFirst({ where: { userId: req.params.userId } });
+    const creator = await prisma.marketplaceCreator.findFirst({
+      where: { OR: [{ id: req.params.id }, { userId: req.params.id }] }
+    });
     if (!creator) throw httpError(404, 'NotFound', 'Creator profile not found');
     const updated = await prisma.marketplaceCreator.update({
       where: { id: creator.id },

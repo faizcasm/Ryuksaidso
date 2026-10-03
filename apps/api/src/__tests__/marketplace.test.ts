@@ -1244,6 +1244,48 @@ describe('GET /api/admin/marketplace/queue', () => {
   });
 });
 
+describe('GET /api/admin/marketplace/agents', () => {
+  it('rejects regular users', async () => {
+    const response = await request(app).get('/api/admin/marketplace/agents').set(auth(OWNER_TOKEN));
+
+    expect(response.status).toBe(403);
+    expect(prisma.marketplaceAgent.findMany).not.toHaveBeenCalled();
+  });
+
+  it('lists every marketplace agent with moderation flags for system admins', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ userRole: 'ADMIN' } as never);
+    vi.mocked(prisma.marketplaceAgent.findMany).mockResolvedValue([
+      marketFixture({ status: 'PUBLISHED', suspended: true }),
+      marketFixture({ id: 'mk2', slug: 'meeting-brief', status: 'DRAFT' }),
+    ] as never);
+
+    const response = await request(app).get('/api/admin/marketplace/agents').set(auth(ADMIN_TOKEN));
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(2);
+    expect(response.body[0]).toMatchObject({
+      slug: 'inbox-triage',
+      status: 'PUBLISHED',
+      suspended: true,
+      installs: 12,
+      creator: { handle: 'faizan' },
+    });
+    expect(vi.mocked(prisma.marketplaceAgent.findMany).mock.calls[0][0]?.where).not.toHaveProperty('status');
+  });
+
+  it('filters by status when one is provided', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ userRole: 'ADMIN' } as never);
+    vi.mocked(prisma.marketplaceAgent.findMany).mockResolvedValue([marketFixture({ status: 'REJECTED' })] as never);
+
+    const response = await request(app)
+      .get('/api/admin/marketplace/agents?status=rejected')
+      .set(auth(ADMIN_TOKEN));
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(prisma.marketplaceAgent.findMany).mock.calls[0][0]?.where).toMatchObject({ status: 'REJECTED' });
+  });
+});
+
 describe('POST /api/admin/marketplace/agents/:id/review', () => {
   it('publishes an approved agent', async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValue({ userRole: 'ADMIN' } as never);
@@ -1358,5 +1400,21 @@ describe('POST /api/admin/marketplace/creators/:userId/moderate', () => {
 
     expect(response.status).toBe(200);
     expect(vi.mocked(prisma.marketplaceCreator.update).mock.calls[0][0]?.data).toMatchObject({ verified: true });
+  });
+
+  it('finds the creator by id even without a linked user', async () => {
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ userRole: 'ADMIN' } as never);
+    vi.mocked(prisma.marketplaceCreator.findFirst).mockResolvedValue(creatorFixture({ userId: null, verified: false }) as never);
+    vi.mocked(prisma.marketplaceCreator.update).mockResolvedValue(creatorFixture({ userId: null, verified: true }) as never);
+
+    const response = await request(app)
+      .post('/api/admin/marketplace/creators/mk_sys_ryuksaidso/moderate')
+      .set(auth(ADMIN_TOKEN))
+      .send({ verified: true });
+
+    expect(response.status).toBe(200);
+    expect(vi.mocked(prisma.marketplaceCreator.findFirst).mock.calls[0][0]?.where).toMatchObject({
+      OR: [{ id: 'mk_sys_ryuksaidso' }, { userId: 'mk_sys_ryuksaidso' }],
+    });
   });
 });

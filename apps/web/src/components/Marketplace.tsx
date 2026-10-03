@@ -1835,11 +1835,9 @@ export function MarketplaceView({
                   <span className="bill-sub">{`@${entry.handle} · ${entry.publishedAgents} published`}</span>
                 </div>
                 <span className={`pill ${entry.verified ? "ok" : "muted"}`}>{entry.verified ? "Verified" : "Unverified"}</span>
-                {entry.userId && (
-                  <button className="secondary" disabled={busy === `creator:${entry.userId}`} onClick={() => void moderateCreator(entry.userId!, !entry.verified)}>
-                    {entry.verified ? "Remove verification" : "Verify creator"}
-                  </button>
-                )}
+                <button className="secondary" disabled={busy === `creator:${entry.id}`} onClick={() => void moderateCreator(entry.id, !entry.verified)}>
+                  {entry.verified ? "Remove verification" : "Verify creator"}
+                </button>
               </div>
             ))}
             {!adminCreators.length && <p className="bill-sub">No creators yet.</p>}
@@ -2101,5 +2099,310 @@ export function MarketplaceView({
         {view.kind === "publish" && renderPublishForm(false)}
       </section>
     </div>
+  );
+}
+
+type AdminAgent = {
+  id: string;
+  slug: string;
+  name: string;
+  status: string;
+  suspended: boolean;
+  verified: boolean;
+  featured: boolean;
+  category: string;
+  pricing: string;
+  logoIcon: string;
+  logoColor: string;
+  installs: number;
+  tries: number;
+  ratingAvg: number;
+  ratingCount: number;
+  organizationId: string;
+  creator: { id: string; handle: string; displayName: string; verified: boolean } | null;
+  updatedAt: string;
+};
+
+const STATUS_PILL: Record<string, string> = {
+  DRAFT: "pill muted",
+  IN_REVIEW: "pill warn",
+  PUBLISHED: "pill ok",
+  REJECTED: "pill bad",
+};
+
+export function MarketplaceAdminSection() {
+  const [tab, setTab] = useState<"queue" | "agents" | "creators">("queue");
+  const [queue, setQueue] = useState<QueueRow[]>([]);
+  const [agents, setAgents] = useState<AdminAgent[]>([]);
+  const [creators, setCreators] = useState<AdminCreator[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState<Message>(null);
+  const [rejectFor, setRejectFor] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const [rows, allAgents, creatorRows] = await Promise.all([
+        api<QueueRow[]>("/admin/marketplace/queue"),
+        api<AdminAgent[]>("/admin/marketplace/agents"),
+        api<AdminCreator[]>("/admin/marketplace/creators"),
+      ]);
+      setQueue(rows);
+      setAgents(allAgents);
+      setCreators(creatorRows);
+    } catch (e) {
+      setMessage({ kind: "err", text: readError(e, "Could not load marketplace administration") });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function queueDecision(id: string, action: "approve" | "reject") {
+    setBusy(`queue:${id}:${action}`);
+    try {
+      await api(`/admin/marketplace/agents/${id}/review`, {
+        method: "POST",
+        body: JSON.stringify({ action, reason: rejectReason.trim() }),
+      });
+      setMessage({ kind: "ok", text: action === "approve" ? "Agent approved and published." : "Agent rejected with feedback." });
+      setRejectFor(null);
+      setRejectReason("");
+      await load();
+    } catch (e) {
+      setMessage({ kind: "err", text: readError(e, "Could not apply the decision") });
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function moderateAgent(id: string, field: "verified" | "featured" | "suspend", value: boolean) {
+    setBusy(`agent:${id}:${field}`);
+    try {
+      await api(`/admin/marketplace/agents/${id}/moderate`, {
+        method: "POST",
+        body: JSON.stringify({ [field]: value }),
+      });
+      setMessage({ kind: "ok", text: "Moderation applied." });
+      await load();
+    } catch (e) {
+      setMessage({ kind: "err", text: readError(e, "Could not apply moderation") });
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function moderateCreator(id: string, verified: boolean) {
+    setBusy(`creator:${id}`);
+    try {
+      await api(`/admin/marketplace/creators/${id}/moderate`, {
+        method: "POST",
+        body: JSON.stringify({ verified }),
+      });
+      setMessage({ kind: "ok", text: verified ? "Creator verified." : "Verification removed." });
+      await load();
+    } catch (e) {
+      setMessage({ kind: "err", text: readError(e, "Could not update the creator") });
+    } finally {
+      setBusy("");
+    }
+  }
+
+  if (loading) {
+    return (
+      <section className="panel">
+        <PanelHead icon={Store} title="Marketplace administration" sub="Loading submissions, agents and creators…" />
+      </section>
+    );
+  }
+
+  return (
+    <section className="panel">
+      <PanelHead
+        icon={Store}
+        title="Marketplace administration"
+        sub="Review submissions, moderate published agents and verify creators"
+      />
+      {message && <Banner message={message} onClose={() => setMessage(null)} />}
+      <div className="int-tabs">
+        <button className={`int-tab ${tab === "queue" ? "on" : ""}`} onClick={() => setTab("queue")}>
+          Review queue{queue.length ? ` (${queue.length})` : ""}
+        </button>
+        <button className={`int-tab ${tab === "agents" ? "on" : ""}`} onClick={() => setTab("agents")}>
+          Agents ({agents.length})
+        </button>
+        <button className={`int-tab ${tab === "creators" ? "on" : ""}`} onClick={() => setTab("creators")}>
+          Creators ({creators.length})
+        </button>
+      </div>
+
+      {tab === "queue" && (
+        <>
+          <p className="bill-sub">Agents submitted by workspace creators. Approve to publish, reject with feedback to send it back.</p>
+          {queue.length ? (
+            <div className="mk-queue">
+              {queue.map((row) => (
+                <div className="mk-queue-row" key={row.id}>
+                  <div className="int-card-top">
+                    <div className="int-card-icon">
+                      <Bot size={16} />
+                    </div>
+                    <div className="int-card-title">
+                      <b>{row.name}</b>
+                      <span>{row.creator ? `@${row.creator.handle}` : row.slug}</span>
+                    </div>
+                    <span className="pill warn">{row.pricing}</span>
+                  </div>
+                  <p className="int-card-blurb">{row.summary}</p>
+                  <div className="mk-req">
+                    <span className="bill-label">Instructions preview</span>
+                    <p className="mk-prose mk-config-preview">{row.config.instructions}</p>
+                  </div>
+                  <div className="int-card-meta">
+                    <span className="pill muted">{CATEGORY_LABELS[row.category] ?? row.category}</span>
+                    {row.config.tools.map((tool) => (
+                      <span className="pill muted" key={tool}>
+                        {tool}
+                      </span>
+                    ))}
+                    {row.requiredIntegrations.map((key) => (
+                      <span className="pill" key={key}>
+                        {integrationLabel(key)}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="int-card-foot mk-queue-actions">
+                    <button className="ghost" onClick={() => { setRejectFor(rejectFor === row.id ? null : row.id); setRejectReason(""); }}>
+                      Reject
+                    </button>
+                    <button className="primary" disabled={busy === `queue:${row.id}:approve`} onClick={() => void queueDecision(row.id, "approve")}>
+                      Approve &amp; publish
+                    </button>
+                  </div>
+                  {rejectFor === row.id && (
+                    <div className="int-form">
+                      <label>
+                        Reason for rejection
+                        <input value={rejectReason} placeholder="Instructions are too thin — add the tool policy." onChange={(e) => setRejectReason(e.target.value)} />
+                      </label>
+                      <div className="mk-queue-actions">
+                        <button className="ghost" onClick={() => setRejectFor(null)}>
+                          Cancel
+                        </button>
+                        <button className="primary" disabled={busy === `queue:${row.id}:reject`} onClick={() => void queueDecision(row.id, "reject")}>
+                          Send rejection
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty">
+              <div className="empty-icon">
+                <Check size={16} />
+              </div>
+              <b>Review queue is clear</b>
+              <p>Submitted agents appear here for approval.</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === "agents" && (
+        <>
+          <p className="bill-sub">Every agent in the marketplace — suspend rule-breakers, feature the good ones and manage verified badges.</p>
+          {agents.length ? (
+            <div className="mk-install-list">
+              {agents.map((row) => (
+                <div className="mk-install-row" key={row.id}>
+                  <div className="mk-logo" style={{ background: `${row.logoColor}1c`, color: row.logoColor, borderColor: `${row.logoColor}59` }}>
+                    {(() => {
+                      const Icon = mkIcon(row.logoIcon);
+                      return <Icon size={16} />;
+                    })()}
+                  </div>
+                  <div className="mk-install-info">
+                    <b>
+                      {row.name}
+                      {row.verified && <BadgeCheck size={13} className="mk-verified-icon" />}
+                    </b>
+                    <span className="bill-sub">{row.creator ? `@${row.creator.handle}` : row.slug} · {row.slug} · {row.installs} installs · {row.tries} tries</span>
+                    <div className="int-card-meta">
+                      <span className={STATUS_PILL[row.status] ?? "pill"}>{row.status.replace("_", " ")}</span>
+                      {row.suspended && <span className="pill bad">Suspended</span>}
+                      {row.featured && <span className="pill warn">Featured</span>}
+                      <span className="pill muted">{row.pricing}</span>
+                    </div>
+                  </div>
+                  <div className="mk-install-actions">
+                    <button className="ghost" disabled={busy === `agent:${row.id}:suspend`} onClick={() => void moderateAgent(row.id, "suspend", !row.suspended)}>
+                      {row.suspended ? "Restore" : "Suspend"}
+                    </button>
+                    <button className="secondary" disabled={busy === `agent:${row.id}:featured`} onClick={() => void moderateAgent(row.id, "featured", !row.featured)}>
+                      {row.featured ? "Unfeature" : "Feature"}
+                    </button>
+                    <button className="ghost" disabled={busy === `agent:${row.id}:verified`} onClick={() => void moderateAgent(row.id, "verified", !row.verified)}>
+                      {row.verified ? "Unverify" : "Verify"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty">
+              <div className="empty-icon">
+                <Store size={16} />
+              </div>
+              <b>No marketplace agents yet</b>
+              <p>Published and submitted agents appear here for moderation.</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === "creators" && (
+        <>
+          <p className="bill-sub">Creator profiles behind the catalog. Verified creators get a badge on every card they own.</p>
+          {creators.length ? (
+            <div className="mk-creator-list">
+              {creators.map((entry) => (
+                <div className="mk-install-row" key={entry.id}>
+                  <div className="mk-logo">
+                    <Users size={15} />
+                  </div>
+                  <div className="mk-install-info">
+                    <b>
+                      {entry.displayName}
+                      {entry.verified && <BadgeCheck size={13} className="mk-verified-icon" />}
+                    </b>
+                    <span className="bill-sub">{`@${entry.handle} · ${entry.publishedAgents} published`}</span>
+                  </div>
+                  <div className="mk-install-actions">
+                    <span className={entry.verified ? "pill ok" : "pill muted"}>{entry.verified ? "Verified" : "Unverified"}</span>
+                    <button className="secondary" disabled={busy === `creator:${entry.id}`} onClick={() => void moderateCreator(entry.id, !entry.verified)}>
+                      {entry.verified ? "Remove verification" : "Verify creator"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty">
+              <div className="empty-icon">
+                <Users size={16} />
+              </div>
+              <b>No creators yet</b>
+              <p>Creator profiles appear as soon as agents are submitted.</p>
+            </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }

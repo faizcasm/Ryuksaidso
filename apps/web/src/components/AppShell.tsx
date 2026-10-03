@@ -69,7 +69,7 @@ import {
   type SupportInbox,
 } from "./CeoSupport";
 import { IntegrationsView } from "./Integrations";
-import { MarketplaceView } from "./Marketplace";
+import { MarketplaceAdminSection, MarketplaceView } from "./Marketplace";
 import { ModelProvidersSection } from "./ModelProviders";
 
 type User = {
@@ -4758,6 +4758,7 @@ function AdminView({
       </div>
       <ObservabilitySection viewerSystemRole={viewerSystemRole} />
       {viewerSystemRole === "ADMIN" && <BillingAdminSection />}
+      {viewerSystemRole === "ADMIN" && <MarketplaceAdminSection />}
       {viewerSystemRole === "ADMIN" && users && <SystemUsersSection users={users} />}
       <div className="admin-grid">
         <section className="panel">

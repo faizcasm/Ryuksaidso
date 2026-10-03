@@ -146,7 +146,7 @@
 - Reviews and ratings: 1–5 star rating with title and body, unique per user per agent (`@@unique([agentId, userId])`), rolling average and histogram shown on the detail page
 - Creator profiles: `/creators/:handle` aggregates verified badge, agent counts, total installs and executions; the official `@ryuksaidso` creator is seeded and non-editable by users, admin-moderatable only
 - Owner analytics: per-agent executions, success rate, tokens and install counts computed read-time from `AgentRun` — no worker changes
-- Moderation: admin review queue, per-agent suspend/feature/unfeature (`suspended` flag hides from browse), creator verify/suspend, all audit-logged
+- Moderation: a dedicated **Marketplace administration** section in the Admin panel (Review queue / Agents / Creators tabs) — approve or reject submissions with a reason, suspend/restore and feature any published agent, verify creators; per-agent actions also remain on the agent detail page, all audit-logged
 - Seeded with six production-grade sample agents (inbox-triage, meeting-brief, research-radar, bug-triage, lead-followup, social-drafter) across FREE/PAID/USAGE pricing
 
 ## Customer support
